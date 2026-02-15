@@ -1,0 +1,20 @@
+#!/bin/sh
+
+echo "🔍 Running pre-commit checks..."
+
+# Run type check
+echo "📝 Type checking..."
+if ! pnpm check; then
+  echo "❌ Type check failed. Commit aborted."
+  exit 1
+fi
+
+# Run production build
+echo "🏗️  Building for production..."
+if ! pnpm build; then
+  echo "❌ Build failed. Commit aborted."
+  exit 1
+fi
+
+echo "✅ All checks passed!"
+exit 0
