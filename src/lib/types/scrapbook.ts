@@ -5,7 +5,6 @@ export interface ScrapbookEntry {
 	location: string | null;
 	notes: string | null;
 	tags: string[];
-	source: 'polaroid' | 'note' | 'both' | null;
 	created_by: string;
 	created_at: string;
 	updated_at: string;
@@ -29,5 +28,4 @@ export type EntryFilter = {
 	location?: string;
 	dateFrom?: string;
 	dateTo?: string;
-	source?: 'polaroid' | 'note' | 'both' | null;
 };

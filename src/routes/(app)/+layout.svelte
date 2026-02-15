@@ -28,15 +28,16 @@
 		DropdownMenuSubContent,
 		DropdownMenuTrigger,
 	} from '$lib/components/ui/dropdown-menu';
-	import { House, Image, Settings, LogOut, Sun, Moon, Monitor, ChevronsUpDown } from '@lucide/svelte';
+	import { Images, Mail, LogOut, Sun, Moon, Monitor, ChevronsUpDown } from '@lucide/svelte';
 	import { theme, type Theme } from '$lib/theme.svelte';
+	import logoLight from '$lib/assets/logo-light.png';
+	import logoDark from '$lib/assets/logo-dark.png';
 
 	let { data, children } = $props();
 
 	const navItems = [
-		{ title: 'Home', href: '/', icon: House },
-		{ title: 'Photos', href: '/photos', icon: Image },
-		{ title: 'Settings', href: '/settings', icon: Settings },
+		{ title: 'Scrapbook', href: '/scrapbook', icon: Images },
+		{ title: 'Letters', href: '/letters', icon: Mail },
 	];
 
 	const user = $derived(data.session?.user);
@@ -64,14 +65,14 @@
 <SidebarProvider>
 	<Sidebar>
 		<SidebarHeader>
-			<div class="flex items-center gap-2 px-2 py-2">
-				<span class="text-lg font-bold">ChenHub</span>
+			<div class="flex items-center justify-center gap-2 px-2 py-2">
+				<img src={logoLight} alt="ChenHub" class="h-16 dark:hidden" />
+				<img src={logoDark} alt="ChenHub" class="h-16 hidden dark:block" />
 			</div>
 		</SidebarHeader>
 
 		<SidebarContent>
 			<SidebarGroup>
-				<SidebarGroupLabel>Navigation</SidebarGroupLabel>
 				<SidebarGroupContent>
 					<SidebarMenu>
 						{#each navItems as item}
@@ -151,10 +152,8 @@
 	</Sidebar>
 
 	<SidebarInset>
-		<header class="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+		<header class="flex items-center p-2">
 			<SidebarTrigger class="-ml-1" />
-			<Separator orientation="vertical" class="mr-2 !h-4" />
-			<span class="text-sm font-medium">ChenHub</span>
 		</header>
 
 		<div class="flex-1 p-4">
