@@ -1,7 +1,24 @@
 import type { ScrapbookEntry, ScrapbookPolaroid } from '$lib/types/scrapbook';
+import { getPaginationParams, buildPaginationMeta } from '$lib/utils/pagination.js';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const { page, limit, offset } = getPaginationParams(url, 20);
+
+	// Get total count
+	const { count, error: countError } = await locals.supabase
+		.from('scrapbook_entries')
+		.select('*', { count: 'exact', head: true });
+
+	if (countError) {
+		return {
+			entries: [] as ScrapbookEntry[],
+			pagination: buildPaginationMeta(0, page, limit),
+			loadError: countError.message,
+		};
+	}
+
+	// Get paginated entries
 	const { data, error } = await locals.supabase
 		.from('scrapbook_entries')
 		.select(`
@@ -23,11 +40,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 				created_at
 			)
 		`)
-		.order('date', { ascending: false });
+		.order('date', { ascending: false })
+		.range(offset, offset + limit - 1);
 
 	if (error) {
 		return {
 			entries: [] as ScrapbookEntry[],
+			pagination: buildPaginationMeta(count ?? 0, page, limit),
 			loadError: error.message,
 		};
 	}
@@ -49,6 +68,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		entries,
+		pagination: buildPaginationMeta(count ?? 0, page, limit),
 		loadError: null,
 	};
 };

@@ -13,7 +13,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Separator } from '$lib/components/ui/separator';
-	import { Feather, Heart, Send, Sparkles, BookHeart, PenLine } from '@lucide/svelte';
+	import { Feather, Heart, Send, Sparkles, BookHeart, PenLine, ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import type { PaginationMeta } from '$lib/utils/pagination.js';
 
 	let { data } = $props();
 
@@ -70,6 +71,12 @@
 
 	function getAuthorName(email: string) {
 		return email?.split('@')[0] ?? 'someone';
+	}
+
+	function goToPage(page: number) {
+		const url = new URL(window.location.href);
+		url.searchParams.set('page', page.toString());
+		goto(url.pathname + url.search);
 	}
 </script>
 
@@ -177,5 +184,48 @@
 				</button>
 			{/each}
 		</div>
+
+		{#if data.pagination.totalPages > 1}
+			<div class="mt-8 flex items-center justify-center gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={!data.pagination.hasPrevPage}
+					onclick={() => goToPage(data.pagination.currentPage - 1)}
+					class="gap-1"
+				>
+					<ChevronLeft class="size-4" />
+					Previous
+				</Button>
+
+				<div class="flex items-center gap-1">
+					{#each Array.from({ length: data.pagination.totalPages }, (_, i) => i + 1) as page}
+						{#if page === 1 || page === data.pagination.totalPages || (page >= data.pagination.currentPage - 1 && page <= data.pagination.currentPage + 1)}
+							<Button
+								variant={page === data.pagination.currentPage ? 'default' : 'outline'}
+								size="sm"
+								onclick={() => goToPage(page)}
+								class="min-w-[2.5rem]"
+							>
+								{page}
+							</Button>
+						{:else if page === data.pagination.currentPage - 2 || page === data.pagination.currentPage + 2}
+							<span class="px-2 text-muted-foreground">...</span>
+						{/if}
+					{/each}
+				</div>
+
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={!data.pagination.hasNextPage}
+					onclick={() => goToPage(data.pagination.currentPage + 1)}
+					class="gap-1"
+				>
+					Next
+					<ChevronRight class="size-4" />
+				</Button>
+			</div>
+		{/if}
 	{/if}
 </div>
