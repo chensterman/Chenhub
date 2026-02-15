@@ -1,0 +1,158 @@
+import { executeCallbacks } from "svelte-toolbelt";
+import { Previous, watch } from "runed";
+import { on } from "svelte/events";
+import { StateMachine } from "../../../internal/state-machine.js";
+/**
+ * Cache for animation names with TTL to reduce getComputedStyle calls.
+ * Uses WeakMap to avoid memory leaks when elements are removed.
+ */
+const animationNameCache = new WeakMap();
+const ANIMATION_NAME_CACHE_TTL_MS = 16; // One frame at 60fps
+const presenceMachine = {
+    mounted: {
+        UNMOUNT: "unmounted",
+        ANIMATION_OUT: "unmountSuspended",
+    },
+    unmountSuspended: {
+        MOUNT: "mounted",
+        ANIMATION_END: "unmounted",
+    },
+    unmounted: {
+        MOUNT: "mounted",
+    },
+};
+export class Presence {
+    opts;
+    prevAnimationNameState = $state("none");
+    styles = $state({ display: "", animationName: "none" });
+    initialStatus;
+    previousPresent;
+    machine;
+    present;
+    constructor(opts) {
+        this.opts = opts;
+        this.present = this.opts.open;
+        this.initialStatus = opts.open.current ? "mounted" : "unmounted";
+        this.previousPresent = new Previous(() => this.present.current);
+        this.machine = new StateMachine(this.initialStatus, presenceMachine);
+        this.handleAnimationEnd = this.handleAnimationEnd.bind(this);
+        this.handleAnimationStart = this.handleAnimationStart.bind(this);
+        watchPresenceChange(this);
+        watchStatusChange(this);
+        watchRefChange(this);
+    }
+    /**
+     * Triggering an ANIMATION_OUT during an ANIMATION_IN will fire an `animationcancel`
+     * event for ANIMATION_IN after we have entered `unmountSuspended` state. So, we
+     * make sure we only trigger ANIMATION_END for the currently active animation.
+     */
+    handleAnimationEnd(event) {
+        if (!this.opts.ref.current)
+            return;
+        // Use cached animation name from styles when available to avoid getComputedStyle
+        const currAnimationName = this.styles.animationName || getAnimationName(this.opts.ref.current);
+        const isCurrentAnimation = currAnimationName.includes(event.animationName) || currAnimationName === "none";
+        if (event.target === this.opts.ref.current && isCurrentAnimation) {
+            this.machine.dispatch("ANIMATION_END");
+        }
+    }
+    handleAnimationStart(event) {
+        if (!this.opts.ref.current)
+            return;
+        if (event.target === this.opts.ref.current) {
+            // Force refresh cache on animation start to get accurate animation name
+            const animationName = getAnimationName(this.opts.ref.current, true);
+            this.prevAnimationNameState = animationName;
+            // Update styles cache for subsequent reads
+            this.styles.animationName = animationName;
+        }
+    }
+    isPresent = $derived.by(() => {
+        return ["mounted", "unmountSuspended"].includes(this.machine.state.current);
+    });
+}
+function watchPresenceChange(state) {
+    watch(() => state.present.current, () => {
+        if (!state.opts.ref.current)
+            return;
+        const hasPresentChanged = state.present.current !== state.previousPresent.current;
+        if (!hasPresentChanged)
+            return;
+        const prevAnimationName = state.prevAnimationNameState;
+        // Force refresh on state change to get accurate current animation
+        const currAnimationName = getAnimationName(state.opts.ref.current, true);
+        // Update styles cache for subsequent reads
+        state.styles.animationName = currAnimationName;
+        if (state.present.current) {
+            state.machine.dispatch("MOUNT");
+        }
+        else if (currAnimationName === "none" || state.styles.display === "none") {
+            // If there is no exit animation or the element is hidden, animations won't run
+            // so we unmount instantly
+            state.machine.dispatch("UNMOUNT");
+        }
+        else {
+            /**
+             * When `present` changes to `false`, we check changes to animation-name to
+             * determine whether an animation has started. We chose this approach (reading
+             * computed styles) because there is no `animationrun` event and `animationstart`
+             * fires after `animation-delay` has expired which would be too late.
+             */
+            const isAnimating = prevAnimationName !== currAnimationName;
+            if (state.previousPresent.current && isAnimating) {
+                state.machine.dispatch("ANIMATION_OUT");
+            }
+            else {
+                state.machine.dispatch("UNMOUNT");
+            }
+        }
+    });
+}
+function watchStatusChange(state) {
+    watch(() => state.machine.state.current, () => {
+        if (!state.opts.ref.current)
+            return;
+        // Use cached animation name first, only force refresh if needed for mounted state
+        const currAnimationName = state.machine.state.current === "mounted"
+            ? getAnimationName(state.opts.ref.current, true)
+            : "none";
+        state.prevAnimationNameState = currAnimationName;
+        // Update styles cache
+        state.styles.animationName = currAnimationName;
+    });
+}
+function watchRefChange(state) {
+    watch(() => state.opts.ref.current, () => {
+        if (!state.opts.ref.current)
+            return;
+        // Snapshot only needed style properties instead of storing live CSSStyleDeclaration
+        // This avoids triggering style recalculations when accessing the cached object
+        const computed = getComputedStyle(state.opts.ref.current);
+        state.styles = {
+            display: computed.display,
+            animationName: computed.animationName || "none",
+        };
+        return executeCallbacks(on(state.opts.ref.current, "animationstart", state.handleAnimationStart), on(state.opts.ref.current, "animationcancel", state.handleAnimationEnd), on(state.opts.ref.current, "animationend", state.handleAnimationEnd));
+    });
+}
+/**
+ * Gets the animation name from computed styles with optional caching.
+ *
+ * @param node - The HTML element to get animation name from
+ * @param forceRefresh - If true, bypasses the cache and forces a fresh getComputedStyle call
+ * @returns The animation name or "none" if not animating
+ */
+function getAnimationName(node, forceRefresh = false) {
+    if (!node)
+        return "none";
+    const now = performance.now();
+    const cached = animationNameCache.get(node);
+    // Return cached value if still valid and not forced to refresh
+    if (!forceRefresh && cached && now - cached.timestamp < ANIMATION_NAME_CACHE_TTL_MS) {
+        return cached.value;
+    }
+    // Compute and cache the new value
+    const value = getComputedStyle(node).animationName || "none";
+    animationNameCache.set(node, { value, timestamp: now });
+    return value;
+}
