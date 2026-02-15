@@ -81,7 +81,7 @@
 						{isSignUp ? 'Create an account' : 'Welcome back'}
 					</h1>
 					<p class="mt-1 text-sm text-muted-foreground">
-						{isSignUp ? 'Enter your email to create an account' : 'Enter your credentials to sign in'}
+						Only cutie patooties allowed!
 					</p>
 				</div>
 			{/if}

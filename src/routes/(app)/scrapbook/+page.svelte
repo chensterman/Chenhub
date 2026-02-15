@@ -19,7 +19,8 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import { getLocalTimeZone, today, type CalendarDate, type DateRange } from '@internationalized/date';
+	import { RangeCalendar as RangeCalendarPrimitive } from 'bits-ui';
+	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
 	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound } from '@lucide/svelte';
 
 	let { data }: { data: { entries: ScrapbookEntry[]; loadError: string | null; supabase: any; session: any } } = $props();
@@ -42,7 +43,7 @@
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 
 	let selectedTagFilter = $state<string | null>(null);
-	let selectedDateRange = $state<DateRange | undefined>();
+	let selectedDateRange = $state<RangeCalendarPrimitive.RootProps['value']>();
 
 	const quickTags = ['Date Night', 'Travel', 'Home', 'Celebration', 'Food', 'Adventure', 'Family'];
 
