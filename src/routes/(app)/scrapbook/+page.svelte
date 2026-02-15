@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { browser } from '$app/environment';
 	import type { ScrapbookEntry } from '$lib/types/scrapbook';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -30,7 +29,6 @@
 	let entryDateOpen = $state(false);
 	let rangeOpen = $state(false);
 	let saving = $state(false);
-	let convertingImage = $state(false);
 	let deletingEntryId = $state<string | null>(null);
 	let confirmDeleteEntryId = $state<string | null>(null);
 	let errorMessage = $state('');
@@ -95,57 +93,9 @@
 			: [...selectedNewTags, tag];
 	}
 
-	async function onFileSelect(event: Event) {
+	function onFileSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		
-		if (!file) {
-			selectedPolaroid = null;
-			return;
-		}
-
-		// Check if file is HEIC/HEIF format
-		const isHeic = file.type === 'image/heic' || 
-		               file.type === 'image/heif' || 
-		               file.name.toLowerCase().endsWith('.heic') || 
-		               file.name.toLowerCase().endsWith('.heif');
-
-		if (isHeic && browser) {
-			try {
-				convertingImage = true;
-				errorMessage = '';
-
-				// Dynamically import heic2any (browser only)
-				const heic2any = (await import('heic2any')).default;
-
-				// Convert HEIC to JPEG
-				const convertedBlob = await heic2any({
-					blob: file,
-					toType: 'image/jpeg',
-					quality: 0.9
-				});
-
-				// heic2any can return Blob or Blob[] depending on the image
-				const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-
-				// Create a new File object from the converted blob
-				const newFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-				const convertedFile = new File([blob], newFileName, {
-					type: 'image/jpeg',
-					lastModified: file.lastModified
-				});
-
-				selectedPolaroid = convertedFile;
-			} catch (error) {
-				console.error('HEIC conversion error:', error);
-				errorMessage = 'Failed to convert HEIC image. Please try a different file.';
-				selectedPolaroid = null;
-			} finally {
-				convertingImage = false;
-			}
-		} else {
-			selectedPolaroid = file;
-		}
+		selectedPolaroid = input.files?.[0] ?? null;
 	}
 
 	function openFilePicker() {
@@ -372,17 +322,15 @@
 									<input
 										bind:this={fileInputRef}
 										type="file"
-										accept="image/*,.heic,.heif"
+										accept="image/*"
 										onchange={onFileSelect}
 										class="hidden"
 									/>
 									<div class="flex items-center gap-2">
-										<Button type="button" variant="outline" class="h-9" onclick={openFilePicker} disabled={convertingImage}>
+										<Button type="button" variant="outline" class="h-9" onclick={openFilePicker}>
 											Choose image
 										</Button>
-										{#if convertingImage}
-											<span class="text-xs text-muted-foreground">Converting image...</span>
-										{:else if selectedPolaroid}
+										{#if selectedPolaroid}
 											<div class="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
 												<span class="truncate">{selectedPolaroid.name}</span>
 												<button
@@ -411,7 +359,7 @@
 
 						<DialogFooter class="mt-4">
 							<Button variant="outline" class="rounded-full" onclick={() => (composeOpen = false)}>Cancel</Button>
-							<Button onclick={createEntry} disabled={saving || convertingImage} class="gap-2 rounded-full px-6">
+							<Button onclick={createEntry} disabled={saving} class="gap-2 rounded-full px-6">
 								{saving ? 'Saving...' : 'Save memory'}
 							</Button>
 						</DialogFooter>
