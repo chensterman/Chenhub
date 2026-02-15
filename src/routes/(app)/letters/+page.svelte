@@ -51,8 +51,12 @@
 	}
 
 	function formatDate(dateStr: string) {
-		const d = new Date(dateStr);
-		return d.toLocaleDateString('en-US', {
+		const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+		const parsedDate = dateOnlyMatch
+			? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
+			: new Date(dateStr);
+
+		return parsedDate.toLocaleDateString('en-US', {
 			month: 'long',
 			day: 'numeric',
 			year: 'numeric',

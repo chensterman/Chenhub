@@ -9,7 +9,12 @@
 	let { data }: { data: { entry: ScrapbookEntry; session: any } } = $props();
 
 	function formatDate(dateStr: string) {
-		return new Date(dateStr).toLocaleDateString('en-US', {
+		const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+		const parsedDate = dateOnlyMatch
+			? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
+			: new Date(dateStr);
+
+		return parsedDate.toLocaleDateString('en-US', {
 			weekday: 'long',
 			month: 'long',
 			day: 'numeric',
