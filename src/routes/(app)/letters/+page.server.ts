@@ -1,4 +1,4 @@
-import { getPaginationParams, buildPaginationMeta } from '$lib/utils/pagination';
+import { getPaginationParams, buildPaginationMeta } from '$lib/utils/pagination.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {

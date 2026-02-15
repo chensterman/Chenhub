@@ -23,7 +23,7 @@
 	import { RangeCalendar as RangeCalendarPrimitive } from 'bits-ui';
 	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
 	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound, ChevronLeft, ChevronRight } from '@lucide/svelte';
-	import type { PaginationMeta } from '$lib/utils/pagination';
+	import type { PaginationMeta } from '$lib/utils/pagination.js';
 
 	let { data }: { data: { entries: ScrapbookEntry[]; pagination: PaginationMeta; loadError: string | null; supabase: any; session: any } } = $props();
 

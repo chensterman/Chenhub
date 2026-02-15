@@ -14,7 +14,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Separator } from '$lib/components/ui/separator';
 	import { Feather, Heart, Send, Sparkles, BookHeart, PenLine, ChevronLeft, ChevronRight } from '@lucide/svelte';
-	import type { PaginationMeta } from '$lib/utils/pagination';
+	import type { PaginationMeta } from '$lib/utils/pagination.js';
 
 	let { data } = $props();
 
