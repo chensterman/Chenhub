@@ -30,7 +30,8 @@ Built with **SvelteKit 2 + Svelte 5**, **Tailwind CSS 4**, **Bits UI**, and **Su
 - Both users can create new tags
 - Users can only delete tags they created
 - Tags are case-insensitive (e.g., "Work" and "work" are the same)
-- Deleting a tag removes it from all entries
+- Deleting a tag removes it from all entries using efficient Postgres function
+- Tag and date filtering is server-side for consistent pagination results
 
 ## Tech stack
 
@@ -80,6 +81,7 @@ Run the following SQL migrations in your Supabase SQL Editor **in this order**:
 2. `migrations/create_shared_tags_table.sql` - Creates tags table with RLS policies
 3. `migrations/seed_initial_tags.sql` - Seeds initial tags (Highlights, Date Night, Travel, etc.)
 4. `migrations/make_tags_case_insensitive.sql` - Adds case-insensitive unique constraint on tag names
+5. `migrations/create_remove_tag_function.sql` - Creates Postgres function for efficient tag deletion
 
 **Note:** Table schemas for `letters`, `scrapbook_entries`, and `scrapbook_polaroids` are not included in migrations and should already exist in your Supabase project.
 

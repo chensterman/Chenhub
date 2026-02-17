@@ -6,21 +6,36 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const { session } = await locals.safeGetSession();
 	const { page, limit, offset } = getPaginationParams(url, 20);
 
-	// Get total count
-	const { count, error: countError } = await locals.supabase
+	// Get user preference for default tag filter
+	const { data: preferences } = await locals.supabase
+		.from('user_preferences')
+		.select('default_tag_filter')
+		.eq('user_id', session?.user?.id)
+		.single();
+
+	// Determine the default tag filter:
+	// - If no preference row exists: default to 'Highlights'
+	// - If preference exists with null: means "All tags" (no filter)
+	// - If preference exists with a tag: use that tag
+	const defaultTagFilter = preferences !== null ? preferences.default_tag_filter : 'Highlights';
+
+	// Get filter parameters from URL
+	// If no 'tag' param in URL, use the user's default preference
+	// Special value '__all__' means user explicitly clicked "All tags" to override default
+	const urlTagParam = url.searchParams.get('tag');
+	const tagFilter = urlTagParam === '__all__' 
+		? null 
+		: (urlTagParam ?? defaultTagFilter);
+	
+	const dateFrom = url.searchParams.get('dateFrom');
+	const dateTo = url.searchParams.get('dateTo');
+
+	// Build the base query
+	let countQuery = locals.supabase
 		.from('scrapbook_entries')
 		.select('*', { count: 'exact', head: true });
 
-	if (countError) {
-		return {
-			entries: [] as ScrapbookEntry[],
-			pagination: buildPaginationMeta(0, page, limit),
-			loadError: countError.message,
-		};
-	}
-
-	// Get paginated entries
-	const { data, error } = await locals.supabase
+	let dataQuery = locals.supabase
 		.from('scrapbook_entries')
 		.select(`
 			id,
@@ -40,7 +55,38 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				sort_order,
 				created_at
 			)
-		`)
+		`);
+
+	// Apply tag filter if present and not null (null means "All tags")
+	if (tagFilter !== null) {
+		countQuery = countQuery.contains('tags', [tagFilter]);
+		dataQuery = dataQuery.contains('tags', [tagFilter]);
+	}
+
+	// Apply date range filters if present
+	if (dateFrom) {
+		countQuery = countQuery.gte('date', dateFrom);
+		dataQuery = dataQuery.gte('date', dateFrom);
+	}
+	if (dateTo) {
+		countQuery = countQuery.lte('date', dateTo);
+		dataQuery = dataQuery.lte('date', dateTo);
+	}
+
+	// Get total count with filters
+	const { count, error: countError } = await countQuery;
+
+	if (countError) {
+		return {
+			entries: [] as ScrapbookEntry[],
+			pagination: buildPaginationMeta(0, page, limit),
+			loadError: countError.message,
+			activeFilters: { tag: tagFilter, dateFrom, dateTo },
+		};
+	}
+
+	// Get paginated entries with filters
+	const { data, error } = await dataQuery
 		.order('date', { ascending: false })
 		.range(offset, offset + limit - 1);
 
@@ -67,28 +113,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		}),
 	}));
 
-	// Get user preference for default tag filter
-	const { data: preferences } = await locals.supabase
-		.from('user_preferences')
-		.select('default_tag_filter')
-		.eq('user_id', session?.user?.id)
-		.single();
-
 	// Load all shared tags
 	const { data: tags } = await locals.supabase
 		.from('tags')
 		.select('name')
 		.order('name');
 
-	// If no preference exists, default to 'Highlights'
-	// If preference exists, use the value (even if null, which means "all tags")
-	const defaultTagFilter = preferences !== null ? preferences.default_tag_filter : 'Highlights';
-
 	return {
 		entries,
 		pagination: buildPaginationMeta(count ?? 0, page, limit),
 		loadError: null,
-		defaultTagFilter,
-		tags: tags?.map((t) => t.name) || [],
+		tags: (tags?.map((t) => t.name) || []) as string[],
+		activeFilters: { 
+			tag: tagFilter as string | null, 
+			dateFrom: dateFrom as string | null, 
+			dateTo: dateTo as string | null 
+		},
 	};
 };

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import type { ScrapbookEntry } from '$lib/types/scrapbook';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -25,7 +26,15 @@
 	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
 
-	let { data }: { data: { entries: ScrapbookEntry[]; pagination: PaginationMeta; loadError: string | null; supabase: any; session: any } } = $props();
+	let { data }: { data: { 
+		entries: ScrapbookEntry[]; 
+		pagination: PaginationMeta; 
+		loadError: string | null; 
+		tags: string[];
+		activeFilters: { tag: string | null; dateFrom: string | null; dateTo: string | null };
+		supabase: any; 
+		session: any;
+	} } = $props();
 
 	let composeOpen = $state(false);
 	let entryDateOpen = $state(false);
@@ -45,39 +54,69 @@
 	let selectedPolaroid = $state<File | null>(null);
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 
-	// Trust the server value - it handles the default 'Highlights' case
-	// null explicitly means "All tags" (user selected it)
-	let selectedTagFilter = $state<string | null>((data as any).defaultTagFilter ?? 'Highlights');
-	let selectedDateRange = $state<RangeCalendarPrimitive.RootProps['value']>();
+	const allTags = $derived(data.tags || []);
 
-	const allTags = $derived((data as any).tags || []);
-
-	const availableTags = $derived.by(() => {
-		const tags = new Set<string>();
-		for (const entry of data.entries) {
-			for (const tag of entry.tags ?? []) tags.add(tag);
-		}
-		return Array.from(tags).sort((a, b) => a.localeCompare(b));
+	// Get active filters from URL params (server-side filtered)
+	// '__all__' is special value meaning "All tags" (user explicitly clicked it)
+	const activeTagFilter = $derived.by(() => {
+		const rawTag = data.activeFilters?.tag;
+		return rawTag === '__all__' ? null : rawTag;
 	});
+	const activeDateFrom = $derived(data.activeFilters?.dateFrom || null);
+	const activeDateTo = $derived(data.activeFilters?.dateTo || null);
+
+	// For date range picker UI state
+	let selectedDateRange = $state<RangeCalendarPrimitive.RootProps['value']>();
 
 	const dateTriggerLabel = $derived(
 		newDate ? newDate.toDate(getLocalTimeZone()).toLocaleDateString() : 'Select date'
 	);
 
 	const rangeTriggerLabel = $derived.by(() => {
-		if (!selectedDateRange?.start) return 'All dates';
-		if (!selectedDateRange.end) return `${selectedDateRange.start.toDate(getLocalTimeZone()).toLocaleDateString()} - ...`;
-		return `${selectedDateRange.start.toDate(getLocalTimeZone()).toLocaleDateString()} - ${selectedDateRange.end.toDate(getLocalTimeZone()).toLocaleDateString()}`;
+		if (!activeDateFrom) return 'All dates';
+		if (!activeDateTo) return `${new Date(activeDateFrom).toLocaleDateString()} - ...`;
+		return `${new Date(activeDateFrom).toLocaleDateString()} - ${new Date(activeDateTo).toLocaleDateString()}`;
 	});
 
-	const filteredEntries = $derived.by(() => {
-		return data.entries.filter((entry) => {
-			const matchesTag = !selectedTagFilter || entry.tags?.includes(selectedTagFilter);
-			const matchesStart = !selectedDateRange?.start || entry.date >= selectedDateRange.start.toString();
-			const matchesEnd = !selectedDateRange?.end || entry.date <= selectedDateRange.end.toString();
-			return matchesTag && matchesStart && matchesEnd;
-		});
-	});
+	// Update URL to apply filters (server-side)
+	function applyTagFilter(tag: string | null) {
+		const url = new URL($page.url);
+		if (tag === null) {
+			// User explicitly clicked "All tags" - use special value to override default
+			url.searchParams.set('tag', '__all__');
+		} else {
+			url.searchParams.set('tag', tag);
+		}
+		// Reset to page 1 when filtering
+		url.searchParams.delete('page');
+		goto(url.toString(), { keepFocus: true });
+	}
+
+	function applyDateFilter() {
+		const url = new URL($page.url);
+		if (selectedDateRange?.start) {
+			url.searchParams.set('dateFrom', selectedDateRange.start.toString());
+		} else {
+			url.searchParams.delete('dateFrom');
+		}
+		if (selectedDateRange?.end) {
+			url.searchParams.set('dateTo', selectedDateRange.end.toString());
+		} else {
+			url.searchParams.delete('dateTo');
+		}
+		// Reset to page 1 when filtering
+		url.searchParams.delete('page');
+		goto(url.toString(), { keepFocus: true });
+	}
+
+	function clearDateFilter() {
+		selectedDateRange = undefined;
+		const url = new URL($page.url);
+		url.searchParams.delete('dateFrom');
+		url.searchParams.delete('dateTo');
+		url.searchParams.delete('page');
+		goto(url.toString(), { keepFocus: true });
+	}
 
 	function goToPage(page: number) {
 		const url = new URL(window.location.href);
@@ -446,24 +485,27 @@
 					bind:value={selectedDateRange}
 					captionLayout="dropdown"
 					onValueChange={() => {
-						if (selectedDateRange?.start && selectedDateRange?.end) rangeOpen = false;
+						if (selectedDateRange?.start && selectedDateRange?.end) {
+							rangeOpen = false;
+							applyDateFilter();
+						}
 					}}
 					maxValue={today(getLocalTimeZone())}
 				/>
 			</Popover.Content>
 		</Popover.Root>
 
-		{#if selectedDateRange?.start}
-			<Button variant="ghost" size="sm" onclick={() => (selectedDateRange = undefined)}>Clear date range</Button>
+		{#if activeDateFrom}
+			<Button variant="ghost" size="sm" onclick={clearDateFilter}>Clear date range</Button>
 		{/if}
 
 		<div class="flex flex-wrap items-center gap-2">
-			<button type="button" onclick={() => (selectedTagFilter = null)}>
-				<Badge variant={!selectedTagFilter ? 'default' : 'outline'}>All tags</Badge>
+			<button type="button" onclick={() => applyTagFilter(null)}>
+				<Badge variant={!activeTagFilter ? 'default' : 'outline'}>All tags</Badge>
 			</button>
-			{#each availableTags as tag}
-				<button type="button" onclick={() => (selectedTagFilter = selectedTagFilter === tag ? null : tag)}>
-					<Badge variant={selectedTagFilter === tag ? 'default' : 'outline'}>{tag}</Badge>
+			{#each allTags as tag}
+				<button type="button" onclick={() => applyTagFilter(activeTagFilter === tag ? null : tag)}>
+					<Badge variant={activeTagFilter === tag ? 'default' : 'outline'}>{tag}</Badge>
 				</button>
 			{/each}
 		</div>
@@ -473,7 +515,7 @@
 		<p class="mb-4 text-center text-sm text-destructive">{data.loadError}</p>
 	{/if}
 
-	{#if filteredEntries.length === 0}
+	{#if data.entries.length === 0}
 		<div class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/70 bg-card/60 py-20 text-center shadow-sm">
 			<div class="mb-4 flex size-16 items-center justify-center rounded-full bg-orange-100 text-orange-500 dark:bg-orange-900/40 dark:text-orange-300">
 				<Camera class="size-7" />
@@ -482,7 +524,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2">
-			{#each filteredEntries as entry}
+			{#each data.entries as entry}
 				<div
 					class="group"
 					tabindex="0"
