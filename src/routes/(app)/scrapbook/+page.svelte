@@ -45,10 +45,12 @@
 	let selectedPolaroid = $state<File | null>(null);
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 
-	let selectedTagFilter = $state<string | null>('Highlights');
+	// Trust the server value - it handles the default 'Highlights' case
+	// null explicitly means "All tags" (user selected it)
+	let selectedTagFilter = $state<string | null>((data as any).defaultTagFilter ?? 'Highlights');
 	let selectedDateRange = $state<RangeCalendarPrimitive.RootProps['value']>();
 
-	const quickTags = ['Highlights', 'Date Night', 'Travel', 'Home', 'Celebration', 'Food', 'Adventure', 'Family'];
+	const allTags = $derived((data as any).tags || []);
 
 	const availableTags = $derived.by(() => {
 		const tags = new Set<string>();
@@ -357,7 +359,7 @@
 							<div class="space-y-2">
 								<p class="text-xs text-muted-foreground">Pick tags</p>
 								<div class="flex flex-wrap gap-2">
-									{#each quickTags as tag}
+									{#each allTags as tag}
 										<button type="button" onclick={() => toggleTag(tag)}>
 											<Badge variant={selectedNewTags.includes(tag) ? 'default' : 'outline'}>
 												{tag}

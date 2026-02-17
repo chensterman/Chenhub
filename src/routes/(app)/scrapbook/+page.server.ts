@@ -3,6 +3,7 @@ import { getPaginationParams, buildPaginationMeta } from '$lib/utils/pagination.
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	const { session } = await locals.safeGetSession();
 	const { page, limit, offset } = getPaginationParams(url, 20);
 
 	// Get total count
@@ -66,9 +67,28 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		}),
 	}));
 
+	// Get user preference for default tag filter
+	const { data: preferences } = await locals.supabase
+		.from('user_preferences')
+		.select('default_tag_filter')
+		.eq('user_id', session?.user?.id)
+		.single();
+
+	// Load all shared tags
+	const { data: tags } = await locals.supabase
+		.from('tags')
+		.select('name')
+		.order('name');
+
+	// If no preference exists, default to 'Highlights'
+	// If preference exists, use the value (even if null, which means "all tags")
+	const defaultTagFilter = preferences !== null ? preferences.default_tag_filter : 'Highlights';
+
 	return {
 		entries,
 		pagination: buildPaginationMeta(count ?? 0, page, limit),
 		loadError: null,
+		defaultTagFilter,
+		tags: tags?.map((t) => t.name) || [],
 	};
 };
