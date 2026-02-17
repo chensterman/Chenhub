@@ -3,6 +3,8 @@ import type { ScrapbookEntry, ScrapbookPolaroid } from '$lib/types/scrapbook';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
+	const { session } = await locals.safeGetSession();
+	
 	const { data: entry, error: fetchError } = await locals.supabase
 		.from('scrapbook_entries')
 		.select(`
@@ -46,10 +48,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		})
 		.sort((a, b) => a.sort_order - b.sort_order);
 
+	// Load all shared tags
+	const { data: tags } = await locals.supabase
+		.from('tags')
+		.select('name')
+		.order('name');
+
 	return {
 		entry: {
 			...typed,
 			polaroids,
 		},
+		tags: tags?.map((t) => t.name) || [],
 	};
 };

@@ -26,7 +26,7 @@
 	let confirmDelete = $state(false);
 	let errorMessage = $state('');
 
-	const quickTags = ['Highlights', 'Date Night', 'Travel', 'Home', 'Celebration', 'Food', 'Adventure', 'Family'];
+	const allTags = $derived((data as any).tags || []);
 	const isAuthor = $derived(data.entry.created_by === data.session?.user?.id);
 
 	const dateTriggerLabel = $derived(
@@ -227,7 +227,7 @@
 				<div class="space-y-2">
 					<p class="text-xs text-muted-foreground">Tags</p>
 					<div class="flex flex-wrap gap-2">
-						{#each quickTags as tag}
+						{#each allTags as tag}
 							<button type="button" onclick={() => toggleTag(tag)}>
 								<Badge variant={editTags.includes(tag) ? 'default' : 'outline'}>
 									{tag}

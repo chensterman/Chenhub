@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import {
 		SidebarProvider,
 		Sidebar,
@@ -28,7 +29,7 @@
 		DropdownMenuSubContent,
 		DropdownMenuTrigger,
 	} from '$lib/components/ui/dropdown-menu';
-	import { Images, Mail, LogOut, Sun, Moon, Monitor, ChevronsUpDown } from '@lucide/svelte';
+	import { Images, Mail, LogOut, Sun, Moon, Monitor, ChevronsUpDown, Settings } from '@lucide/svelte';
 	import { theme, type Theme } from '$lib/theme.svelte';
 	import logoLight from '$lib/assets/logo-light.png';
 	import logoDark from '$lib/assets/logo-dark.png';
@@ -59,6 +60,10 @@
 	async function handleSignOut() {
 		await data.supabase.auth.signOut();
 		window.location.href = '/login';
+	}
+
+	function handleSettingsClick() {
+		goto('/settings');
 	}
 </script>
 
@@ -136,12 +141,17 @@
 										</DropdownMenuItem>
 									{/each}
 								</DropdownMenuSubContent>
-							</DropdownMenuSub>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem onclick={handleSignOut}>
-								<LogOut class="size-4" />
-								Sign Out
-							</DropdownMenuItem>
+						</DropdownMenuSub>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem onclick={handleSettingsClick}>
+							<Settings class="size-4" />
+							Settings
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem onclick={handleSignOut}>
+							<LogOut class="size-4" />
+							Sign Out
+						</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</SidebarMenuItem>
