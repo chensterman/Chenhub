@@ -4,13 +4,14 @@ ChenHub is a private shared app for two users with:
 
 - **Scrapbook**: create, filter, view, and delete polaroid memories with shared tags
 - **Letters**: create, edit, view, and delete shared letters
+- **Bucket List**: add, edit, filter, and delete shared bucket list ideas with an "I'm Feeling Lucky" random picker
 - **Settings**: manage shared tags and set default scrapbook filter preferences
 
 Built with **SvelteKit 2 + Svelte 5**, **Tailwind CSS 4**, **Bits UI**, and **Supabase** (Auth + Postgres + Storage).
 
 ## Current app behavior
 
-- Auth-required app shell with sidebar navigation (`/scrapbook`, `/letters`)
+- Auth-required app shell with sidebar navigation (`/scrapbook`, `/letters`, `/bucket-list`)
 - Login/signup page at `/login`
 - Signup is currently restricted to an in-code allowlist in `src/routes/(auth)/login/+page.svelte`
 - Root app route redirects to `/scrapbook`
@@ -24,6 +25,18 @@ Built with **SvelteKit 2 + Svelte 5**, **Tailwind CSS 4**, **Bits UI**, and **Su
 - Tag entries with shared tags (both users can create and use tags)
 - Filter entries by tag or date range
 - Set default tag filter in Settings
+
+### Letters
+- Write letters to each other
+- Paginated list view with content preview
+- Click through to read the full letter
+
+### Bucket List
+- Add ideas with a title, description, and tags
+- Both users can edit any item; only the creator can delete it
+- Filter by tag (uses the same shared tags system as scrapbook)
+- "I'm Feeling Lucky" button picks a random item from the full list
+- Paginated card grid
 
 ### Shared Tags System
 - All tags are shared between users
@@ -65,6 +78,7 @@ This repo expects the following resources in Supabase:
    - `letters`
    - `scrapbook_entries`
    - `scrapbook_polaroids`
+   - `bucket_list_items` (see `migrations/create_bucket_list_table.sql`)
    - `user_preferences` (for default tag filter settings)
    - `tags` (shared tags system)
 2. **Storage bucket**
@@ -72,18 +86,6 @@ This repo expects the following resources in Supabase:
 3. **Auth**
    - Email/password auth enabled
    - Callback URL configured for `/auth/callback`
-
-### Database Migrations
-
-Run the following SQL migrations in your Supabase SQL Editor **in this order**:
-
-1. `migrations/create_user_preferences.sql` - Creates user_preferences table for per-user settings
-2. `migrations/create_shared_tags_table.sql` - Creates tags table with RLS policies
-3. `migrations/seed_initial_tags.sql` - Seeds initial tags (Highlights, Date Night, Travel, etc.)
-4. `migrations/make_tags_case_insensitive.sql` - Adds case-insensitive unique constraint on tag names
-5. `migrations/create_remove_tag_function.sql` - Creates Postgres function for efficient tag deletion
-
-**Note:** Table schemas for `letters`, `scrapbook_entries`, and `scrapbook_polaroids` are not included in migrations and should already exist in your Supabase project.
 
 ## Local development
 

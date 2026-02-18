@@ -29,7 +29,7 @@
 		DropdownMenuSubContent,
 		DropdownMenuTrigger,
 	} from '$lib/components/ui/dropdown-menu';
-	import { Images, Mail, LogOut, Sun, Moon, Monitor, ChevronsUpDown, Settings } from '@lucide/svelte';
+	import { Images, Mail, ListChecks, LogOut, Sun, Moon, Monitor, ChevronsUpDown, Settings } from '@lucide/svelte';
 	import { theme, type Theme } from '$lib/theme.svelte';
 	import logoLight from '$lib/assets/logo-light.png';
 	import logoDark from '$lib/assets/logo-dark.png';
@@ -39,6 +39,7 @@
 	const navItems = [
 		{ title: 'Scrapbook', href: '/scrapbook', icon: Images },
 		{ title: 'Letters', href: '/letters', icon: Mail },
+		{ title: 'Bucket List', href: '/bucket-list', icon: ListChecks },
 	];
 
 	const user = $derived(data.session?.user);
