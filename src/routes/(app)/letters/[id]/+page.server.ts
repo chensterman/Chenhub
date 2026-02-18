@@ -12,5 +12,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		error(404, 'Letter not found');
 	}
 
-	return { letter };
+	const { data: profiles } = await locals.supabase
+		.from('profiles')
+		.select('id, email');
+
+	const userNames: Record<string, string> = {};
+	for (const p of profiles ?? []) {
+		userNames[p.id] = p.email.split('@')[0];
+	}
+
+	return { letter, userNames };
 };
