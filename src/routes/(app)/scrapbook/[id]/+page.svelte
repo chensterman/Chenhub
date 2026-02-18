@@ -20,6 +20,9 @@
 	let editLocation = $state(data.entry.location ?? '');
 	let editNotes = $state(data.entry.notes ?? '');
 	let editTags = $state<string[]>([...data.entry.tags]);
+	let editCaptions = $state<Record<string, string>>(
+		Object.fromEntries((data.entry.polaroids ?? []).map((p) => [p.id, p.caption ?? '']))
+	);
 	let editDateOpen = $state(false);
 	let saving = $state(false);
 	let deleting = $state(false);
@@ -48,10 +51,7 @@
 	}
 
 	function getCreatorLabel(createdBy: string) {
-		if (createdBy === data.session?.user?.id) {
-			return data.session?.user?.email ?? 'You';
-		}
-		return `User ${createdBy.slice(0, 8)}`;
+		return (data as any).userNames?.[createdBy] ?? 'someone';
 	}
 
 	function startEditing() {
@@ -60,6 +60,9 @@
 		editLocation = data.entry.location ?? '';
 		editNotes = data.entry.notes ?? '';
 		editTags = [...data.entry.tags];
+		editCaptions = Object.fromEntries(
+			(data.entry.polaroids ?? []).map((p) => [p.id, p.caption ?? ''])
+		);
 		editing = true;
 		errorMessage = '';
 	}
@@ -98,10 +101,27 @@
 
 		if (error) {
 			errorMessage = error.message;
-		} else {
-			editing = false;
-			invalidateAll();
+			saving = false;
+			return;
 		}
+
+		for (const polaroid of data.entry.polaroids ?? []) {
+			const newCaption = editCaptions[polaroid.id]?.trim() || null;
+			if (newCaption !== (polaroid.caption ?? null)) {
+				const { error: capError } = await data.supabase
+					.from('scrapbook_polaroids')
+					.update({ caption: newCaption })
+					.eq('id', polaroid.id);
+				if (capError) {
+					errorMessage = capError.message;
+					saving = false;
+					return;
+				}
+			}
+		}
+
+		editing = false;
+		invalidateAll();
 
 		saving = false;
 	}
@@ -238,18 +258,77 @@
 				</div>
 
 				<div class="space-y-1.5">
-					<p class="text-xs text-muted-foreground">Notes</p>
-					<Textarea
-						bind:value={editNotes}
-						placeholder="Notes about this memory..."
-						class="min-h-[140px] resize-none font-serif text-[15px] break-words [overflow-wrap:anywhere]"
-					/>
-				</div>
+				<p class="text-xs text-muted-foreground">Notes</p>
+				<Textarea
+					bind:value={editNotes}
+					placeholder="Notes about this memory..."
+					class="min-h-[140px] resize-none font-serif text-[15px] break-words [overflow-wrap:anywhere]"
+				/>
+			</div>
 
-				<div class="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-					<p class="font-medium">Note: Polaroid images cannot be edited</p>
-					<p class="mt-1">The images associated with this memory cannot be changed.</p>
+			{#if data.entry.polaroids && data.entry.polaroids.length > 0}
+				<div class="space-y-3">
+					<p class="text-xs text-muted-foreground">Photos &amp; captions</p>
+					{#if data.entry.polaroids.length === 1}
+					<div class="group relative overflow-hidden rounded-2xl">
+						<img
+							src={data.entry.polaroids[0].url ?? ''}
+							alt={editCaptions[data.entry.polaroids[0].id] || 'Photo 1'}
+							class="aspect-[4/3] w-full object-cover"
+						/>
+						<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8 opacity-40 transition-all duration-200 group-hover:opacity-100">
+							<div class="flex items-center gap-1.5 border-b border-white/40 pb-0.5 focus-within:border-white/80">
+								<Pencil class="size-3 shrink-0 text-white/70" />
+								<input
+									bind:value={editCaptions[data.entry.polaroids[0].id]}
+									placeholder="Add a caption..."
+									class="w-full bg-transparent font-serif text-sm italic text-white placeholder-white/50 outline-none"
+								/>
+							</div>
+						</div>
+					</div>
+				{:else}
+					<div class="group relative overflow-hidden rounded-2xl">
+						<img
+							src={data.entry.polaroids[0].url ?? ''}
+							alt={editCaptions[data.entry.polaroids[0].id] || 'Photo 1'}
+							class="aspect-[4/3] w-full object-cover"
+						/>
+						<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8 opacity-40 transition-all duration-200 group-hover:opacity-100">
+							<div class="flex items-center gap-1.5 border-b border-white/40 pb-0.5 focus-within:border-white/80">
+								<Pencil class="size-3 shrink-0 text-white/70" />
+								<input
+									bind:value={editCaptions[data.entry.polaroids[0].id]}
+									placeholder="Add a caption..."
+									class="w-full bg-transparent font-serif text-sm italic text-white placeholder-white/50 outline-none"
+								/>
+							</div>
+						</div>
+					</div>
+					<div class="grid gap-3 sm:grid-cols-2">
+						{#each data.entry.polaroids.slice(1) as polaroid, i}
+							<div class="group relative overflow-hidden rounded-xl">
+								<img
+									src={polaroid.url ?? ''}
+									alt={editCaptions[polaroid.id] || `Photo ${i + 2}`}
+									class="aspect-[4/3] w-full object-cover"
+								/>
+								<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2.5 pt-6 opacity-40 transition-all duration-200 group-hover:opacity-100">
+									<div class="flex items-center gap-1 border-b border-white/40 pb-0.5 focus-within:border-white/80">
+										<Pencil class="size-2.5 shrink-0 text-white/70" />
+										<input
+											bind:value={editCaptions[polaroid.id]}
+											placeholder="Add a caption..."
+											class="w-full bg-transparent font-serif text-xs italic text-white placeholder-white/50 outline-none"
+										/>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
 				</div>
+			{/if}
 			</div>
 
 			{#if errorMessage}

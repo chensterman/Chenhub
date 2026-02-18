@@ -206,10 +206,7 @@
 	}
 
 	function getCreatorLabel(createdBy: string) {
-		if (createdBy === data.session?.user?.id) {
-			return data.session?.user?.email ?? 'You';
-		}
-		return `User ${createdBy.slice(0, 8)}`;
+		return (data as any).userNames?.[createdBy] ?? 'someone';
 	}
 
 	async function deleteEntry(entry: ScrapbookEntry) {

@@ -36,7 +36,7 @@
 		const { error } = await data.supabase.from('letters').insert({
 			title: newTitle.trim(),
 			content: newContent.trim(),
-			author_email: data.session?.user?.email,
+			created_by: data.session?.user?.id,
 		});
 
 		if (error) {
@@ -69,8 +69,8 @@
 		return content.slice(0, maxLength).trimEnd() + '...';
 	}
 
-	function getAuthorName(email: string) {
-		return email?.split('@')[0] ?? 'someone';
+	function getAuthorName(userId: string) {
+		return (data as any).userNames?.[userId] ?? 'someone';
 	}
 
 	function goToPage(page: number) {
@@ -162,7 +162,7 @@
 						</div>
 
 						<div class="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-							<span class="font-medium">{getAuthorName(letter.author_email)}</span>
+							<span class="font-medium">{getAuthorName(letter.created_by)}</span>
 							<span>&middot;</span>
 							<time>{formatDate(letter.created_at)}</time>
 						</div>

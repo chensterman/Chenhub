@@ -119,6 +119,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.select('name')
 		.order('name');
 
+	const { data: profiles } = await locals.supabase
+		.from('profiles')
+		.select('id, email');
+
+	const userNames: Record<string, string> = {};
+	for (const p of profiles ?? []) {
+		userNames[p.id] = p.email.split('@')[0];
+	}
+
 	return {
 		entries,
 		pagination: buildPaginationMeta(count ?? 0, page, limit),
@@ -129,5 +138,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			dateFrom: dateFrom as string | null, 
 			dateTo: dateTo as string | null 
 		},
+		userNames,
 	};
 };

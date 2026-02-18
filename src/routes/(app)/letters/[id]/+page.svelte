@@ -16,7 +16,7 @@
 	let confirmDelete = $state(false);
 	let errorMessage = $state('');
 
-	const isAuthor = $derived(data.session?.user?.email === data.letter.author_email);
+	const isAuthor = $derived(data.session?.user?.id === data.letter.created_by);
 
 	function formatDate(dateStr: string) {
 		const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
@@ -32,8 +32,8 @@
 		});
 	}
 
-	function getAuthorName(email: string) {
-		return email?.split('@')[0] ?? 'someone';
+	function getAuthorName(userId: string) {
+		return (data as any).userNames?.[userId] ?? 'someone';
 	}
 
 	function startEditing() {
@@ -163,7 +163,7 @@
 				</h1>
 
 				<div class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-					<span class="font-medium">{getAuthorName(data.letter.author_email)}</span>
+					<span class="font-medium">{getAuthorName(data.letter.created_by)}</span>
 					<span>&middot;</span>
 					<time>{formatDate(data.letter.created_at)}</time>
 				</div>

@@ -54,11 +54,21 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.select('name')
 		.order('name');
 
+	const { data: profiles } = await locals.supabase
+		.from('profiles')
+		.select('id, email');
+
+	const userNames: Record<string, string> = {};
+	for (const p of profiles ?? []) {
+		userNames[p.id] = p.email.split('@')[0];
+	}
+
 	return {
 		entry: {
 			...typed,
 			polaroids,
 		},
 		tags: tags?.map((t) => t.name) || [],
+		userNames,
 	};
 };
