@@ -25,13 +25,14 @@
 	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
 	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
+	import { SearchBar } from '$lib/components/ui/search-bar/index.js';
 
 	let { data }: { data: { 
 		entries: ScrapbookEntry[]; 
 		pagination: PaginationMeta; 
 		loadError: string | null; 
 		tags: string[];
-		activeFilters: { tag: string | null; dateFrom: string | null; dateTo: string | null };
+		activeFilters: { tag: string | null; dateFrom: string | null; dateTo: string | null; q: string | null };
 		supabase: any; 
 		session: any;
 	} } = $props();
@@ -64,6 +65,7 @@
 	});
 	const activeDateFrom = $derived(data.activeFilters?.dateFrom || null);
 	const activeDateTo = $derived(data.activeFilters?.dateTo || null);
+	const activeSearch = $derived(data.activeFilters?.q || '');
 
 	// For date range picker UI state
 	let selectedDateRange = $state<RangeCalendarPrimitive.RootProps['value']>();
@@ -466,45 +468,48 @@
 		</div>
 	</section>
 
-	<section class="mb-8 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-		<Popover.Root bind:open={rangeOpen}>
-			<Popover.Trigger id="scrapbook-range-date">
-				{#snippet child({ props })}
-					<Button {...props} variant="outline" class="justify-between font-normal">
-						<CalendarRange class="size-4" />
-						{rangeTriggerLabel}
-						<ChevronDownIcon class="size-4" />
-					</Button>
-				{/snippet}
-			</Popover.Trigger>
-			<Popover.Content class="w-auto overflow-hidden p-0" align="start">
-				<RangeCalendar
-					bind:value={selectedDateRange}
-					captionLayout="dropdown"
-					onValueChange={() => {
-						if (selectedDateRange?.start && selectedDateRange?.end) {
-							rangeOpen = false;
-							applyDateFilter();
-						}
-					}}
-					maxValue={today(getLocalTimeZone())}
-				/>
-			</Popover.Content>
-		</Popover.Root>
+	<section class="mb-8 flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
+		<SearchBar value={activeSearch} placeholder="Search memories..." />
+		<div class="flex flex-wrap items-center gap-3">
+			<Popover.Root bind:open={rangeOpen}>
+				<Popover.Trigger id="scrapbook-range-date">
+					{#snippet child({ props })}
+						<Button {...props} variant="outline" class="justify-between font-normal">
+							<CalendarRange class="size-4" />
+							{rangeTriggerLabel}
+							<ChevronDownIcon class="size-4" />
+						</Button>
+					{/snippet}
+				</Popover.Trigger>
+				<Popover.Content class="w-auto overflow-hidden p-0" align="start">
+					<RangeCalendar
+						bind:value={selectedDateRange}
+						captionLayout="dropdown"
+						onValueChange={() => {
+							if (selectedDateRange?.start && selectedDateRange?.end) {
+								rangeOpen = false;
+								applyDateFilter();
+							}
+						}}
+						maxValue={today(getLocalTimeZone())}
+					/>
+				</Popover.Content>
+			</Popover.Root>
 
-		{#if activeDateFrom}
-			<Button variant="ghost" size="sm" onclick={clearDateFilter}>Clear date range</Button>
-		{/if}
+			{#if activeDateFrom}
+				<Button variant="ghost" size="sm" onclick={clearDateFilter}>Clear date range</Button>
+			{/if}
 
-		<div class="flex flex-wrap items-center gap-2">
-			<button type="button" onclick={() => applyTagFilter(null)}>
-				<Badge variant={!activeTagFilter ? 'default' : 'outline'}>All tags</Badge>
-			</button>
-			{#each allTags as tag}
-				<button type="button" onclick={() => applyTagFilter(activeTagFilter === tag ? null : tag)}>
-					<Badge variant={activeTagFilter === tag ? 'default' : 'outline'}>{tag}</Badge>
+			<div class="flex flex-wrap items-center gap-2">
+				<button type="button" onclick={() => applyTagFilter(null)}>
+					<Badge variant={!activeTagFilter ? 'default' : 'outline'}>All tags</Badge>
 				</button>
-			{/each}
+				{#each allTags as tag}
+					<button type="button" onclick={() => applyTagFilter(activeTagFilter === tag ? null : tag)}>
+						<Badge variant={activeTagFilter === tag ? 'default' : 'outline'}>{tag}</Badge>
+					</button>
+				{/each}
+			</div>
 		</div>
 	</section>
 

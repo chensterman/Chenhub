@@ -8,6 +8,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const urlTagParam = url.searchParams.get('tag');
 	const tagFilter = urlTagParam === '__all__' ? null : urlTagParam;
+	const searchQuery = url.searchParams.get('q')?.trim() || null;
 
 	let countQuery = locals.supabase
 		.from('bucket_list_items')
@@ -22,6 +23,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		dataQuery = dataQuery.contains('tags', [tagFilter]);
 	}
 
+	if (searchQuery) {
+		const q = `%${searchQuery}%`;
+		countQuery = countQuery.or(`title.ilike.${q},description.ilike.${q}`);
+		dataQuery = dataQuery.or(`title.ilike.${q},description.ilike.${q}`);
+	}
+
 	const { count, error: countError } = await countQuery;
 
 	if (countError) {
@@ -30,6 +37,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			pagination: buildPaginationMeta(0, page, limit),
 			loadError: countError.message,
 			activeTag: tagFilter,
+			activeSearch: searchQuery,
 			userNames: {} as Record<string, string>,
 			tags: [] as string[],
 		};
@@ -45,6 +53,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			pagination: buildPaginationMeta(count ?? 0, page, limit),
 			loadError: error.message,
 			activeTag: tagFilter,
+			activeSearch: searchQuery,
 			userNames: {} as Record<string, string>,
 			tags: [] as string[],
 		};
@@ -65,6 +74,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		pagination: buildPaginationMeta(count ?? 0, page, limit),
 		loadError: null,
 		activeTag: tagFilter,
+		activeSearch: searchQuery,
 		userNames,
 		tags: (tagsData?.map((t) => t.name) ?? []) as string[],
 		session,
