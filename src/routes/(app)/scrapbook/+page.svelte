@@ -25,7 +25,7 @@
 	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
 	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
-	import { SearchBar } from '$lib/components/ui/search-bar';
+	import { SearchBar } from '$lib/components/ui/search-bar/index.js';
 
 	let { data }: { data: { 
 		entries: ScrapbookEntry[]; 
