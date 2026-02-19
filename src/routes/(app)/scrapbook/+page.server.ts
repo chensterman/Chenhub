@@ -29,6 +29,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	
 	const dateFrom = url.searchParams.get('dateFrom');
 	const dateTo = url.searchParams.get('dateTo');
+	const searchQuery = url.searchParams.get('q')?.trim() || null;
 
 	// Build the base query
 	let countQuery = locals.supabase
@@ -63,6 +64,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		dataQuery = dataQuery.contains('tags', [tagFilter]);
 	}
 
+	// Apply free-text search filter if present
+	if (searchQuery) {
+		const q = `%${searchQuery}%`;
+		countQuery = countQuery.or(`title.ilike.${q},notes.ilike.${q},location.ilike.${q}`);
+		dataQuery = dataQuery.or(`title.ilike.${q},notes.ilike.${q},location.ilike.${q}`);
+	}
+
 	// Apply date range filters if present
 	if (dateFrom) {
 		countQuery = countQuery.gte('date', dateFrom);
@@ -81,7 +89,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			entries: [] as ScrapbookEntry[],
 			pagination: buildPaginationMeta(0, page, limit),
 			loadError: countError.message,
-			activeFilters: { tag: tagFilter, dateFrom, dateTo },
+			activeFilters: { tag: tagFilter, dateFrom, dateTo, q: searchQuery },
 		};
 	}
 
@@ -136,7 +144,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		activeFilters: { 
 			tag: tagFilter as string | null, 
 			dateFrom: dateFrom as string | null, 
-			dateTo: dateTo as string | null 
+			dateTo: dateTo as string | null,
+			q: searchQuery,
 		},
 		userNames,
 	};

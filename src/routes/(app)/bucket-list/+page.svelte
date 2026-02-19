@@ -18,6 +18,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ListChecks, Trash2, UserRound, Tags, ChevronLeft, ChevronRight, Plus, Shuffle, Star } from '@lucide/svelte';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
+	import { SearchBar } from '$lib/components/ui/search-bar';
 
 	let { data }: {
 		data: {
@@ -25,6 +26,7 @@
 			pagination: PaginationMeta;
 			loadError: string | null;
 			activeTag: string | null;
+			activeSearch: string | null;
 			userNames: Record<string, string>;
 			tags: string[];
 			supabase: any;
@@ -311,16 +313,19 @@
 		</div>
 	</section>
 
-	<!-- Tag filter bar -->
-	<section class="mb-8 flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-		<button type="button" onclick={() => applyTagFilter(null)}>
-			<Badge variant={!data.activeTag ? 'default' : 'outline'}>All</Badge>
-		</button>
-		{#each data.tags as tag}
-			<button type="button" onclick={() => applyTagFilter(data.activeTag === tag ? null : tag)}>
-				<Badge variant={data.activeTag === tag ? 'default' : 'outline'}>{tag}</Badge>
+	<!-- Filter bar -->
+	<section class="mb-8 flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
+		<SearchBar value={data.activeSearch ?? ''} placeholder="Search bucket list..." />
+		<div class="flex flex-wrap items-center gap-2">
+			<button type="button" onclick={() => applyTagFilter(null)}>
+				<Badge variant={!data.activeTag ? 'default' : 'outline'}>All</Badge>
 			</button>
-		{/each}
+			{#each data.tags as tag}
+				<button type="button" onclick={() => applyTagFilter(data.activeTag === tag ? null : tag)}>
+					<Badge variant={data.activeTag === tag ? 'default' : 'outline'}>{tag}</Badge>
+				</button>
+			{/each}
+		</div>
 	</section>
 
 	{#if data.loadError}
