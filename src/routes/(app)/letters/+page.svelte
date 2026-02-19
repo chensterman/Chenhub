@@ -11,8 +11,9 @@
 		DialogTrigger,
 	} from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
-	import { Textarea } from '$lib/components/ui/textarea';
+	import { RichTextEditor } from '$lib/components/ui/rich-text-editor';
 	import { Separator } from '$lib/components/ui/separator';
+	import { sanitizeLetterHtml, stripHtmlToText } from '$lib/utils/sanitize-html.js';
 	import { Feather, Heart, Send, Sparkles, BookHeart, PenLine, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
 
@@ -25,7 +26,8 @@
 	let errorMessage = $state('');
 
 	async function createLetter() {
-		if (!newTitle.trim() || !newContent.trim()) {
+		const contentPlain = stripHtmlToText(newContent).trim();
+		if (!newTitle.trim() || !contentPlain) {
 			errorMessage = 'Please fill in both a title and content.';
 			return;
 		}
@@ -35,7 +37,7 @@
 
 		const { error } = await data.supabase.from('letters').insert({
 			title: newTitle.trim(),
-			content: newContent.trim(),
+			content: sanitizeLetterHtml(newContent),
 			created_by: data.session?.user?.id,
 		});
 
@@ -65,8 +67,9 @@
 	}
 
 	function getPreview(content: string, maxLength = 170) {
-		if (content.length <= maxLength) return content;
-		return content.slice(0, maxLength).trimEnd() + '...';
+		const plain = stripHtmlToText(content);
+		if (plain.length <= maxLength) return plain;
+		return plain.slice(0, maxLength).trimEnd() + '...';
 	}
 
 	function getAuthorName(userId: string) {
@@ -117,10 +120,10 @@
 								bind:value={newTitle}
 								class="border-0 border-b rounded-none bg-transparent dark:bg-transparent shadow-none px-0 text-lg font-serif placeholder:text-muted-foreground/50 focus-visible:ring-0"
 							/>
-							<Textarea
-								placeholder="Dear [slur],"
+							<RichTextEditor
 								bind:value={newContent}
-								class="min-h-[280px] resize-none border-0 rounded-none bg-transparent dark:bg-transparent shadow-none px-0 font-serif text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0 break-words [overflow-wrap:anywhere]"
+								placeholder="Dear [slur],"
+								class="min-h-[280px] border-0 font-serif text-[15px] leading-relaxed break-words [overflow-wrap:anywhere]"
 							/>
 						</div>
 
