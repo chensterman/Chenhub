@@ -23,7 +23,7 @@
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { RangeCalendar as RangeCalendarPrimitive } from 'bits-ui';
 	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
-	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound, ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import { ImagePlus, Camera, MapPin, CalendarDays, Tags, CalendarRange, Trash2, UserRound, ChevronLeft, ChevronRight, ListChecks, X } from '@lucide/svelte';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
 	import { SearchBar } from '$lib/components/ui/search-bar/index.js';
 
@@ -33,6 +33,7 @@
 		loadError: string | null; 
 		tags: string[];
 		activeFilters: { tag: string | null; dateFrom: string | null; dateTo: string | null; q: string | null };
+		bucketListItem: { id: string; title: string } | null;
 		supabase: any; 
 		session: any;
 	} } = $props();
@@ -116,6 +117,13 @@
 		const url = new URL($page.url);
 		url.searchParams.delete('dateFrom');
 		url.searchParams.delete('dateTo');
+		url.searchParams.delete('page');
+		goto(url.toString(), { keepFocus: true });
+	}
+
+	function clearBucketListFilter() {
+		const url = new URL($page.url);
+		url.searchParams.delete('bucket_list_item');
 		url.searchParams.delete('page');
 		goto(url.toString(), { keepFocus: true });
 	}
@@ -331,6 +339,24 @@
 		<div class="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-muted/50 blur-3xl"></div>
 		<div class="absolute top-20 -left-8 h-56 w-56 rounded-full bg-secondary/30 blur-3xl"></div>
 	</div>
+
+	{#if data.bucketListItem}
+		<div class="mb-4 flex items-center gap-3 rounded-2xl border border-green-200/70 bg-green-50/80 px-4 py-3 text-sm dark:border-green-800/50 dark:bg-green-950/40">
+			<ListChecks class="size-4 shrink-0 text-green-600 dark:text-green-400" />
+			<span class="flex-1 text-green-800 dark:text-green-300">
+				Showing memories for <span class="font-semibold">{data.bucketListItem.title}</span>
+			</span>
+			<button
+				type="button"
+				onclick={clearBucketListFilter}
+				class="flex items-center gap-1 rounded-full text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-200"
+				aria-label="Clear filter"
+			>
+				<X class="size-3.5" />
+				<span class="text-xs">Clear</span>
+			</button>
+		</div>
+	{/if}
 
 	<section class="mb-6 rounded-3xl border border-border/60 bg-card/70 p-8 text-center shadow-sm backdrop-blur-sm">
 		<h1 class="font-serif text-4xl font-semibold tracking-tight">Scrapbook</h1>

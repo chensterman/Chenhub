@@ -2,8 +2,10 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import type { BucketListItem } from '$lib/types/bucket-list.js';
+	import type { ScrapbookEntry } from '$lib/types/scrapbook.js';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import Calendar from '$lib/components/ui/calendar/calendar.svelte';
 	import {
 		Dialog,
 		DialogContent,
@@ -14,11 +16,14 @@
 		DialogTrigger,
 	} from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
+	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { Separator } from '$lib/components/ui/separator';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { ListChecks, Trash2, UserRound, Tags, ChevronLeft, ChevronRight, Plus, Shuffle, Star } from '@lucide/svelte';
+	import { ListChecks, Trash2, UserRound, Tags, ChevronLeft, ChevronRight, Plus, Shuffle, Star, CheckCircle2, Circle, BookImage, X, Search } from '@lucide/svelte';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import type { PaginationMeta } from '$lib/utils/pagination.js';
 	import { SearchBar } from '$lib/components/ui/search-bar/index.js';
+	import { getLocalTimeZone, today, type CalendarDate, parseDate } from '@internationalized/date';
 
 	let { data }: {
 		data: {
@@ -27,6 +32,7 @@
 			loadError: string | null;
 			activeTag: string | null;
 			activeSearch: string | null;
+			showCompleted: boolean;
 			userNames: Record<string, string>;
 			tags: string[];
 			supabase: any;
@@ -59,8 +65,49 @@
 	let luckyLoading = $state(false);
 	let luckyError = $state('');
 
+	// Complete state
+	let completeOpen = $state(false);
+	let completingItem = $state<BucketListItem | null>(null);
+	let completeDateOpen = $state(false);
+	let completeDateValue = $state<CalendarDate | undefined>(today(getLocalTimeZone()));
+	let completeSaving = $state(false);
+	let completeError = $state('');
+
+	// Add memories state
+	let memoriesOpen = $state(false);
+	let memoriesItem = $state<BucketListItem | null>(null);
+	let memoriesSearch = $state('');
+	let allEntries = $state<ScrapbookEntry[]>([]);
+	let linkedEntryIds = $state<Set<string>>(new Set());
+	let memoriesLoading = $state(false);
+	let memoriesSaving = $state(false);
+	let memoriesError = $state('');
+
+	const completeDateLabel = $derived(
+		completeDateValue
+			? completeDateValue.toDate(getLocalTimeZone()).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+			: 'Select date'
+	);
+
+	const filteredEntries = $derived(
+		memoriesSearch.trim()
+			? allEntries.filter((e) =>
+					(e.title ?? '').toLowerCase().includes(memoriesSearch.toLowerCase()) ||
+					(e.location ?? '').toLowerCase().includes(memoriesSearch.toLowerCase())
+			  )
+			: allEntries
+	);
+
 	function getCreatorLabel(createdBy: string) {
 		return data.userNames?.[createdBy] ?? 'someone';
+	}
+
+	function formatDate(dateStr: string) {
+		const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+		const d = m
+			? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+			: new Date(dateStr);
+		return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 	}
 
 	function applyTagFilter(tag: string | null) {
@@ -69,6 +116,17 @@
 			url.searchParams.set('tag', '__all__');
 		} else {
 			url.searchParams.set('tag', tag);
+		}
+		url.searchParams.delete('page');
+		goto(url.toString(), { keepFocus: true });
+	}
+
+	function toggleShowCompleted() {
+		const url = new URL($page.url);
+		if (data.showCompleted) {
+			url.searchParams.delete('showCompleted');
+		} else {
+			url.searchParams.set('showCompleted', 'true');
 		}
 		url.searchParams.delete('page');
 		goto(url.toString(), { keepFocus: true });
@@ -197,7 +255,8 @@
 
 		const { count, error: countError } = await data.supabase
 			.from('bucket_list_items')
-			.select('*', { count: 'exact', head: true });
+			.select('*', { count: 'exact', head: true })
+			.is('completed_at', null);
 
 		if (countError || !count) {
 			luckyError = count === 0 ? 'No ideas yet — add some first!' : (countError?.message ?? 'Something went wrong.');
@@ -210,7 +269,8 @@
 
 		const { data: rows, error } = await data.supabase
 			.from('bucket_list_items')
-			.select('id, title, description, tags, created_by, created_at, updated_at')
+			.select('id, title, description, tags, created_by, created_at, updated_at, completed_at')
+			.is('completed_at', null)
 			.order('created_at', { ascending: true })
 			.range(randomOffset, randomOffset);
 
@@ -224,6 +284,145 @@
 		luckyItem = rows[0] as BucketListItem;
 		luckyLoading = false;
 		luckyOpen = true;
+	}
+
+	// --- Completion flow ---
+
+	function openComplete(item: BucketListItem, e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+		completingItem = item;
+		completeDateValue = today(getLocalTimeZone());
+		completeError = '';
+		completeOpen = true;
+	}
+
+	async function markComplete() {
+		if (!completingItem) return;
+		completeSaving = true;
+		completeError = '';
+
+		const completedAt = completeDateValue
+			? completeDateValue.toDate(getLocalTimeZone()).toISOString()
+			: new Date().toISOString();
+
+		const { error } = await data.supabase
+			.from('bucket_list_items')
+			.update({ completed_at: completedAt, updated_at: new Date().toISOString() })
+			.eq('id', completingItem.id);
+
+		if (error) {
+			completeError = error.message;
+			completeSaving = false;
+			return;
+		}
+
+		completeOpen = false;
+		completingItem = null;
+		completeSaving = false;
+		invalidateAll();
+	}
+
+	async function markIncomplete(item: BucketListItem, e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		const { error } = await data.supabase
+			.from('bucket_list_items')
+			.update({ completed_at: null, updated_at: new Date().toISOString() })
+			.eq('id', item.id);
+
+		if (!error) invalidateAll();
+	}
+
+	// --- Add memories flow ---
+
+	async function openMemories(item: BucketListItem, e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+		memoriesItem = item;
+		memoriesSearch = '';
+		memoriesError = '';
+		memoriesLoading = true;
+		memoriesOpen = true;
+
+		const [{ data: entries }, { data: existingLinks }] = await Promise.all([
+			data.supabase
+				.from('scrapbook_entries')
+				.select('id, title, date, location, tags')
+				.order('date', { ascending: false }),
+			data.supabase
+				.from('bucket_list_memories')
+				.select('scrapbook_entry_id')
+				.eq('bucket_list_item_id', item.id),
+		]);
+
+		allEntries = (entries ?? []) as ScrapbookEntry[];
+		linkedEntryIds = new Set((existingLinks ?? []).map((r: any) => r.scrapbook_entry_id));
+		memoriesLoading = false;
+	}
+
+	function toggleMemoryEntry(entryId: string) {
+		const next = new Set(linkedEntryIds);
+		if (next.has(entryId)) {
+			next.delete(entryId);
+		} else {
+			next.add(entryId);
+		}
+		linkedEntryIds = next;
+	}
+
+	async function saveMemories() {
+		if (!memoriesItem) return;
+		memoriesSaving = true;
+		memoriesError = '';
+
+		// Fetch current links fresh
+		const { data: current } = await data.supabase
+			.from('bucket_list_memories')
+			.select('scrapbook_entry_id')
+			.eq('bucket_list_item_id', memoriesItem.id);
+
+		const currentIds = new Set<string>((current ?? []).map((r: any) => r.scrapbook_entry_id as string));
+		const toAdd = [...linkedEntryIds].filter((id) => !currentIds.has(id));
+		const toRemove = [...currentIds].filter((id) => !linkedEntryIds.has(id));
+
+		const ops: Promise<any>[] = [];
+
+		if (toAdd.length > 0) {
+			ops.push(
+				data.supabase.from('bucket_list_memories').insert(
+					toAdd.map((scrapbook_entry_id) => ({
+						bucket_list_item_id: memoriesItem!.id,
+						scrapbook_entry_id,
+					}))
+				)
+			);
+		}
+
+		if (toRemove.length > 0) {
+			ops.push(
+				data.supabase
+					.from('bucket_list_memories')
+					.delete()
+					.eq('bucket_list_item_id', memoriesItem.id)
+					.in('scrapbook_entry_id', toRemove)
+			);
+		}
+
+		const results = await Promise.all(ops);
+		const err = results.find((r) => r.error)?.error;
+
+		if (err) {
+			memoriesError = err.message;
+			memoriesSaving = false;
+			return;
+		}
+
+		memoriesOpen = false;
+		memoriesItem = null;
+		memoriesSaving = false;
+		invalidateAll();
 	}
 </script>
 
@@ -326,6 +525,21 @@
 				</button>
 			{/each}
 		</div>
+		<div class="flex items-center gap-2">
+			<button
+				type="button"
+				onclick={toggleShowCompleted}
+				class="flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+			>
+				{#if data.showCompleted}
+					<CheckCircle2 class="size-3.5 text-green-500" />
+					Hide completed
+				{:else}
+					<Circle class="size-3.5" />
+					Show completed
+				{/if}
+			</button>
+		</div>
 	</section>
 
 	{#if data.loadError}
@@ -338,12 +552,13 @@
 				<ListChecks class="size-7" />
 			</div>
 			<p class="font-serif text-lg text-muted-foreground">
-				{data.activeTag ? `No ideas tagged "${data.activeTag}"` : 'No ideas yet — add the first one!'}
+				{data.activeTag ? `No ideas tagged "${data.activeTag}"` : data.showCompleted ? 'No completed items yet' : 'No ideas yet — add the first one!'}
 			</p>
 		</div>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#each data.items as item}
+				{@const isCompleted = !!item.completed_at}
 				<div
 					class="group"
 					tabindex="0"
@@ -351,30 +566,69 @@
 					onclick={() => openEdit(item)}
 					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(item); } }}
 				>
-					<article class="relative h-full cursor-pointer rounded-3xl border border-border/60 bg-gradient-to-b from-card to-card/75 p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-orange-500/10">
-						{#if item.created_by === data.session?.user?.id}
-							<Button
-								variant="ghost"
-								size="sm"
-								class={`absolute right-4 top-4 z-10 h-8 rounded-full border border-border/60 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-background hover:text-foreground ${confirmDeleteId === item.id ? 'px-2' : 'w-8 p-0'}`}
-								disabled={deletingId === item.id}
-								onpointerdown={(e) => e.stopPropagation()}
-								onclick={(e) => { e.preventDefault(); e.stopPropagation(); deleteItem(item); }}
-								aria-label="Delete idea"
-							>
-								{#if deletingId === item.id}
-									<Trash2 class="size-3.5 animate-pulse" />
-									<span class="sr-only">Deleting</span>
-								{:else if confirmDeleteId === item.id}
-									<span class="text-[11px] font-medium">Confirm delete?</span>
-								{:else}
-									<Trash2 class="size-3.5" />
-									<span class="sr-only">Delete idea</span>
-								{/if}
-							</Button>
+					<article class={`relative h-full cursor-pointer rounded-3xl border border-border/60 bg-gradient-to-b from-card to-card/75 p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-orange-500/10 ${isCompleted ? 'opacity-75' : ''}`}>
+
+						<!-- Top-right action buttons -->
+						<div role="group" class="absolute right-4 top-4 z-10 flex items-center gap-1.5" onpointerdown={(e) => e.stopPropagation()}>
+							<!-- Complete / uncomplete toggle -->
+							{#if isCompleted}
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-8 w-8 rounded-full border border-green-300/60 bg-green-50/80 p-0 text-green-600 backdrop-blur-sm hover:bg-green-100 dark:border-green-700/60 dark:bg-green-950/60 dark:text-green-400 dark:hover:bg-green-900/60"
+									onclick={(e) => markIncomplete(item, e)}
+									aria-label="Mark incomplete"
+									title="Mark as incomplete"
+								>
+									<CheckCircle2 class="size-4" />
+								</Button>
+							{:else}
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-8 w-8 rounded-full border border-border/60 bg-background/80 p-0 text-muted-foreground backdrop-blur-sm hover:border-green-300 hover:bg-green-50 hover:text-green-600 dark:hover:border-green-700 dark:hover:bg-green-950/60 dark:hover:text-green-400"
+									onclick={(e) => openComplete(item, e)}
+									aria-label="Mark complete"
+									title="Mark as complete"
+								>
+									<Circle class="size-4" />
+								</Button>
+							{/if}
+
+							<!-- Delete (creator only) -->
+							{#if item.created_by === data.session?.user?.id}
+								<Button
+									variant="ghost"
+									size="sm"
+									class={`h-8 rounded-full border border-border/60 bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-background hover:text-foreground ${confirmDeleteId === item.id ? 'px-2' : 'w-8 p-0'}`}
+									disabled={deletingId === item.id}
+									onclick={(e) => { e.preventDefault(); e.stopPropagation(); deleteItem(item); }}
+									aria-label="Delete idea"
+								>
+									{#if deletingId === item.id}
+										<Trash2 class="size-3.5 animate-pulse" />
+										<span class="sr-only">Deleting</span>
+									{:else if confirmDeleteId === item.id}
+										<span class="text-[11px] font-medium">Confirm delete?</span>
+									{:else}
+										<Trash2 class="size-3.5" />
+										<span class="sr-only">Delete idea</span>
+									{/if}
+								</Button>
+							{/if}
+						</div>
+
+						<!-- Completed badge -->
+						{#if isCompleted}
+							<div class="mb-3 flex items-center gap-1.5">
+								<span class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950/60 dark:text-green-400">
+									<CheckCircle2 class="size-3" />
+									Completed {formatDate(item.completed_at!)}
+								</span>
+							</div>
 						{/if}
 
-						<h2 class="font-serif text-xl font-semibold tracking-tight break-words [overflow-wrap:anywhere] pr-8 transition-colors group-hover:text-orange-500 dark:group-hover:text-orange-300">
+						<h2 class={`font-serif text-xl font-semibold tracking-tight break-words [overflow-wrap:anywhere] pr-20 transition-colors group-hover:text-orange-500 dark:group-hover:text-orange-300 ${isCompleted ? 'line-through decoration-muted-foreground/40' : ''}`}>
 							{item.title}
 						</h2>
 
@@ -401,10 +655,35 @@
 							{/if}
 						</div>
 
-						<div class="mt-4 flex items-center text-xs font-medium text-muted-foreground/60 transition-colors group-hover:text-orange-500/80 dark:group-hover:text-orange-300/90">
-							Edit idea
-							<span class="ml-1 transition-transform group-hover:translate-x-0.5">&rarr;</span>
-						</div>
+						<!-- Completed item actions: Add/See memories -->
+						{#if isCompleted}
+							<div role="group" class="mt-4 flex flex-wrap items-center gap-2" onpointerdown={(e) => e.stopPropagation()}>
+								<Button
+									variant="outline"
+									size="sm"
+									class="gap-1.5 rounded-full text-xs"
+									onclick={(e) => { e.preventDefault(); e.stopPropagation(); openMemories(item, e); }}
+								>
+									<BookImage class="size-3.5" />
+									{(item.memory_count ?? 0) > 0 ? 'Edit memories' : 'Add memories'}
+								</Button>
+								{#if (item.memory_count ?? 0) > 0}
+									<a
+										href={`/scrapbook?bucket_list_item=${item.id}`}
+										class="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+										onclick={(e) => e.stopPropagation()}
+									>
+										<BookImage class="size-3.5" />
+										See {item.memory_count} {item.memory_count === 1 ? 'memory' : 'memories'} →
+									</a>
+								{/if}
+							</div>
+						{:else}
+							<div class="mt-4 flex items-center text-xs font-medium text-muted-foreground/60 transition-colors group-hover:text-orange-500/80 dark:group-hover:text-orange-300/90">
+								Edit idea
+								<span class="ml-1 transition-transform group-hover:translate-x-0.5">&rarr;</span>
+							</div>
+						{/if}
 					</article>
 				</div>
 			{/each}
@@ -554,6 +833,132 @@
 				{/if}
 				<Button class="rounded-full" onclick={() => (luckyOpen = false)}>
 					{luckyError ? 'Close' : 'Got it!'}
+				</Button>
+			</DialogFooter>
+		</div>
+	</DialogContent>
+</Dialog>
+
+<!-- Mark complete dialog -->
+<Dialog bind:open={completeOpen} onOpenChange={(open) => { if (!open) { completingItem = null; completeError = ''; } }}>
+	<DialogContent class="max-w-sm rounded-2xl border-border/60 p-0 overflow-hidden" showCloseButton={false}>
+		<div class="bg-gradient-to-b from-muted/40 to-background p-6">
+			<DialogHeader class="text-left">
+				<DialogTitle class="font-serif text-2xl flex items-center gap-2">
+					<CheckCircle2 class="size-5 text-green-500" />
+					Mark as complete!
+				</DialogTitle>
+				<DialogDescription>
+					{completingItem?.title}
+				</DialogDescription>
+			</DialogHeader>
+
+			<div class="mt-5 space-y-3 rounded-xl border border-border/60 bg-card p-4">
+				<p class="text-xs text-muted-foreground">When did you do this? (optional)</p>
+				<Popover.Root bind:open={completeDateOpen}>
+					<Popover.Trigger id="complete-date">
+						{#snippet child({ props })}
+							<Button {...props} variant="outline" class="w-full justify-between font-normal">
+								{completeDateLabel}
+								<ChevronDownIcon class="size-4" />
+							</Button>
+						{/snippet}
+					</Popover.Trigger>
+					<Popover.Content class="w-auto overflow-hidden p-0" align="start">
+						<Calendar
+							type="single"
+							bind:value={completeDateValue}
+							captionLayout="dropdown"
+							onValueChange={() => { completeDateOpen = false; }}
+							maxValue={today(getLocalTimeZone())}
+						/>
+					</Popover.Content>
+				</Popover.Root>
+			</div>
+
+			{#if completeError}
+				<p class="mt-3 text-sm text-center text-destructive">{completeError}</p>
+			{/if}
+
+			<DialogFooter class="mt-4">
+				<Button variant="outline" class="rounded-full" onclick={() => (completeOpen = false)}>Cancel</Button>
+				<Button onclick={markComplete} disabled={completeSaving} class="gap-2 rounded-full px-6 bg-green-600 hover:bg-green-700 text-white">
+					{completeSaving ? 'Saving...' : 'Mark complete'}
+				</Button>
+			</DialogFooter>
+		</div>
+	</DialogContent>
+</Dialog>
+
+<!-- Add/edit memories dialog -->
+<Dialog bind:open={memoriesOpen} onOpenChange={(open) => { if (!open) { memoriesItem = null; memoriesError = ''; allEntries = []; linkedEntryIds = new Set(); } }}>
+	<DialogContent class="max-w-lg rounded-2xl border-border/60 p-0 overflow-hidden" showCloseButton={false}>
+		<div class="bg-gradient-to-b from-muted/40 to-background p-6">
+			<DialogHeader class="text-left">
+				<DialogTitle class="font-serif text-2xl flex items-center gap-2">
+					<BookImage class="size-5" />
+					Link memories
+				</DialogTitle>
+				<DialogDescription>
+					Select scrapbook memories for <span class="font-medium text-foreground">{memoriesItem?.title}</span>
+				</DialogDescription>
+			</DialogHeader>
+
+			<div class="mt-5 space-y-3">
+				<!-- Search -->
+				<div class="relative">
+					<Search class="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						placeholder="Search memories..."
+						bind:value={memoriesSearch}
+						class="pl-8 font-serif text-sm"
+					/>
+				</div>
+
+				<!-- Entry list -->
+				<div class="max-h-72 overflow-y-auto rounded-xl border border-border/60 bg-card">
+					{#if memoriesLoading}
+						<p class="p-4 text-center text-sm text-muted-foreground">Loading memories...</p>
+					{:else if filteredEntries.length === 0}
+						<p class="p-4 text-center text-sm text-muted-foreground">No memories found</p>
+					{:else}
+						{#each filteredEntries as entry}
+							<button
+								type="button"
+								class={`flex w-full items-start gap-3 border-b border-border/40 px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40 ${linkedEntryIds.has(entry.id) ? 'bg-green-50/60 dark:bg-green-950/30' : ''}`}
+								onclick={() => toggleMemoryEntry(entry.id)}
+							>
+								<div class={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${linkedEntryIds.has(entry.id) ? 'border-green-500 bg-green-500' : 'border-muted-foreground/40'}`}>
+									{#if linkedEntryIds.has(entry.id)}
+										<svg class="size-2.5 text-white" fill="none" viewBox="0 0 10 8" stroke="currentColor" stroke-width="2">
+											<path d="M1 4l3 3 5-6" />
+										</svg>
+									{/if}
+								</div>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">{entry.title ?? 'Untitled memory'}</p>
+									<p class="mt-0.5 text-xs text-muted-foreground">
+										{formatDate(entry.date)}{entry.location ? ` · ${entry.location}` : ''}
+									</p>
+								</div>
+							</button>
+						{/each}
+					{/if}
+				</div>
+
+				{#if linkedEntryIds.size > 0}
+					<p class="text-xs text-muted-foreground text-center">{linkedEntryIds.size} {linkedEntryIds.size === 1 ? 'memory' : 'memories'} selected</p>
+				{/if}
+			</div>
+
+			{#if memoriesError}
+				<p class="mt-3 text-sm text-center text-destructive">{memoriesError}</p>
+			{/if}
+
+			<DialogFooter class="mt-4">
+				<Button variant="outline" class="rounded-full" onclick={() => (memoriesOpen = false)}>Cancel</Button>
+				<Button onclick={saveMemories} disabled={memoriesSaving} class="gap-2 rounded-full px-6">
+					{memoriesSaving ? 'Saving...' : 'Save memories'}
 				</Button>
 			</DialogFooter>
 		</div>

@@ -9,6 +9,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const urlTagParam = url.searchParams.get('tag');
 	const tagFilter = urlTagParam === '__all__' ? null : urlTagParam;
 	const searchQuery = url.searchParams.get('q')?.trim() || null;
+	const showCompleted = url.searchParams.get('showCompleted') === 'true';
 
 	let countQuery = locals.supabase
 		.from('bucket_list_items')
@@ -16,7 +17,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	let dataQuery = locals.supabase
 		.from('bucket_list_items')
-		.select('id, title, description, tags, created_by, created_at, updated_at');
+		.select(`
+			id,
+			title,
+			description,
+			tags,
+			created_by,
+			created_at,
+			updated_at,
+			completed_at,
+			memory_count:bucket_list_memories(count)
+		`);
+
+	// By default only show incomplete items
+	if (!showCompleted) {
+		countQuery = countQuery.is('completed_at', null);
+		dataQuery = dataQuery.is('completed_at', null);
+	}
 
 	if (tagFilter !== null) {
 		countQuery = countQuery.contains('tags', [tagFilter]);
@@ -38,6 +55,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			loadError: countError.message,
 			activeTag: tagFilter,
 			activeSearch: searchQuery,
+			showCompleted,
 			userNames: {} as Record<string, string>,
 			tags: [] as string[],
 		};
@@ -54,6 +72,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			loadError: error.message,
 			activeTag: tagFilter,
 			activeSearch: searchQuery,
+			showCompleted,
 			userNames: {} as Record<string, string>,
 			tags: [] as string[],
 		};
@@ -69,12 +88,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		userNames[p.id] = p.email.split('@')[0];
 	}
 
+	// Flatten the memory_count aggregate from Supabase's nested count format
+	const items = ((data ?? []) as any[]).map((item) => ({
+		...item,
+		memory_count: item.memory_count?.[0]?.count ?? 0,
+	})) as BucketListItem[];
+
 	return {
-		items: (data ?? []) as BucketListItem[],
+		items,
 		pagination: buildPaginationMeta(count ?? 0, page, limit),
 		loadError: null,
 		activeTag: tagFilter,
 		activeSearch: searchQuery,
+		showCompleted,
 		userNames,
 		tags: (tagsData?.map((t) => t.name) ?? []) as string[],
 		session,
