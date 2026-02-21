@@ -2,8 +2,9 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Textarea } from '$lib/components/ui/textarea';
+	import { RichTextEditor } from '$lib/components/ui/rich-text-editor';
 	import { Separator } from '$lib/components/ui/separator';
+	import { isLetterHtml, sanitizeLetterHtml, stripHtmlToText } from '$lib/utils/sanitize-html.js';
 	import { ArrowLeft, Pencil, Trash2, Save, X, Feather } from '@lucide/svelte';
 
 	let { data } = $props();
@@ -44,7 +45,8 @@
 	}
 
 	async function saveLetter() {
-		if (!editTitle.trim() || !editContent.trim()) {
+		const contentPlain = stripHtmlToText(editContent).trim();
+		if (!editTitle.trim() || !contentPlain) {
 			errorMessage = 'Please fill in both a title and content.';
 			return;
 		}
@@ -56,7 +58,7 @@
 			.from('letters')
 			.update({
 				title: editTitle.trim(),
-				content: editContent.trim(),
+				content: sanitizeLetterHtml(editContent),
 				updated_at: new Date().toISOString(),
 			})
 			.eq('id', data.letter.id);
@@ -130,9 +132,9 @@
 					bind:value={editTitle}
 					class="border-0 border-b rounded-none bg-transparent px-0 text-xl font-serif placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:border-foreground/20 break-words [overflow-wrap:anywhere]"
 				/>
-				<Textarea
+				<RichTextEditor
 					bind:value={editContent}
-					class="min-h-[340px] resize-none border-0 bg-transparent px-0 font-serif text-[16px] leading-[1.9] placeholder:text-muted-foreground/50 focus-visible:ring-0 break-words [overflow-wrap:anywhere]"
+					class="min-h-[340px] border-0 font-serif text-[16px] leading-[1.9] break-words [overflow-wrap:anywhere]"
 				/>
 			</div>
 
@@ -180,9 +182,15 @@
 			</div>
 
 			<div class="px-8 py-8 sm:px-12">
-				<div class="whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-serif text-[17px] leading-[1.95] text-foreground/90">
-					{data.letter.content}
-				</div>
+				{#if isLetterHtml(data.letter.content)}
+					<div class="break-words [overflow-wrap:anywhere] font-serif text-[17px] leading-[1.95] text-foreground/90 letter-content">
+						{@html sanitizeLetterHtml(data.letter.content)}
+					</div>
+				{:else}
+					<div class="whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-serif text-[17px] leading-[1.95] text-foreground/90">
+						{data.letter.content}
+					</div>
+				{/if}
 			</div>
 
 			{#if isAuthor}
