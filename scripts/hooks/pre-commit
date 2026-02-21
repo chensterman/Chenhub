@@ -2,19 +2,85 @@
 
 echo "🔍 Running pre-commit checks..."
 
-# Run type check
-echo "📝 Type checking..."
-if ! pnpm check; then
-  echo "❌ Type check failed. Commit aborted."
+# ── 1. No .env files staged ────────────────────────────────────────────────────
+ENV_FILES=$(git diff --cached --name-only | grep -E '^\.env(\.|$)')
+if [ -n "$ENV_FILES" ]; then
+  echo "❌ Blocked: .env file(s) staged for commit:"
+  echo "$ENV_FILES"
+  echo "   Remove them with: git reset HEAD <file>"
   exit 1
 fi
 
-# Run production build
+# ── 2. No SQL / migration files staged ────────────────────────────────────────
+SQL_FILES=$(git diff --cached --name-only | grep -E '(^migrations/|\.sql$)')
+if [ -n "$SQL_FILES" ]; then
+  echo "❌ Blocked: SQL/migration file(s) staged for commit:"
+  echo "$SQL_FILES"
+  echo "   These are kept locally only (see .gitignore)."
+  echo "   Remove them with: git reset HEAD <file>"
+  exit 1
+fi
+
+# ── 3. No Supabase URLs or anon keys in staged content ────────────────────────
+# Anon keys are JWTs — they always start with "eyJ"
+# Supabase project URLs contain ".supabase.co"
+STAGED_CONTENT=$(git diff --cached -U0 | grep '^+' | grep -v '^+++')
+if echo "$STAGED_CONTENT" | grep -qE '\.supabase\.co|eyJ[A-Za-z0-9_-]{20,}'; then
+  echo "❌ Blocked: Possible Supabase URL or anon key found in staged changes."
+  echo "   Use environment variables via \$env/static/public instead."
+  exit 1
+fi
+
+# ── 4. No Svelte 4 syntax in staged .svelte files ─────────────────────────────
+SVELTE_FILES=$(git diff --cached --name-only | grep '\.svelte$')
+if [ -n "$SVELTE_FILES" ]; then
+  SVELTE4_HITS=""
+
+  for f in $SVELTE_FILES; do
+    # export let (Svelte 4 props)
+    if git show ":$f" | grep -qE '^\s*export let '; then
+      SVELTE4_HITS="$SVELTE4_HITS\n  $f: uses 'export let' (use \$props() instead)"
+    fi
+    # $: reactive statements
+    if git show ":$f" | grep -qE '^\s*\$:'; then
+      SVELTE4_HITS="$SVELTE4_HITS\n  $f: uses '\$:' reactive statement (use \$derived/\$effect instead)"
+    fi
+    # <slot /> or <slot>
+    if git show ":$f" | grep -qE '<slot[\s/>]'; then
+      SVELTE4_HITS="$SVELTE4_HITS\n  $f: uses '<slot>' (use {@render children()} instead)"
+    fi
+  done
+
+  if [ -n "$SVELTE4_HITS" ]; then
+    echo "❌ Blocked: Svelte 4 syntax detected (this project uses Svelte 5 runes):"
+    printf "$SVELTE4_HITS\n"
+    exit 1
+  fi
+fi
+
+# ── 5. Type check ──────────────────────────────────────────────────────────────
+echo "📝 Type checking..."
+TMPFILE=$(mktemp)
+pnpm check > "$TMPFILE" 2>&1
+if [ $? -ne 0 ]; then
+  cat "$TMPFILE"
+  rm -f "$TMPFILE"
+  echo "❌ Type check failed. Commit aborted."
+  exit 1
+fi
+rm -f "$TMPFILE"
+
+# ── 6. Production build ────────────────────────────────────────────────────────
 echo "🏗️  Building for production..."
-if ! pnpm build; then
+TMPFILE=$(mktemp)
+pnpm build > "$TMPFILE" 2>&1
+if [ $? -ne 0 ]; then
+  cat "$TMPFILE"
+  rm -f "$TMPFILE"
   echo "❌ Build failed. Commit aborted."
   exit 1
 fi
+rm -f "$TMPFILE"
 
 echo "✅ All checks passed!"
 exit 0
