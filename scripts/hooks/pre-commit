@@ -60,17 +60,27 @@ fi
 
 # ── 5. Type check ──────────────────────────────────────────────────────────────
 echo "📝 Type checking..."
-if ! pnpm check; then
+TMPFILE=$(mktemp)
+pnpm check > "$TMPFILE" 2>&1
+if [ $? -ne 0 ]; then
+  cat "$TMPFILE"
+  rm -f "$TMPFILE"
   echo "❌ Type check failed. Commit aborted."
   exit 1
 fi
+rm -f "$TMPFILE"
 
 # ── 6. Production build ────────────────────────────────────────────────────────
 echo "🏗️  Building for production..."
-if ! pnpm build; then
+TMPFILE=$(mktemp)
+pnpm build > "$TMPFILE" 2>&1
+if [ $? -ne 0 ]; then
+  cat "$TMPFILE"
+  rm -f "$TMPFILE"
   echo "❌ Build failed. Commit aborted."
   exit 1
 fi
+rm -f "$TMPFILE"
 
 echo "✅ All checks passed!"
 exit 0

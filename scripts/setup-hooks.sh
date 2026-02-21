@@ -2,9 +2,9 @@
 
 echo "🔧 Setting up git hooks..."
 
-# Copy pre-commit hook
-cp scripts/hooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+# Symlink pre-commit hook so changes to scripts/hooks/pre-commit are picked up automatically
+ln -sf "$(pwd)/scripts/hooks/pre-commit" .git/hooks/pre-commit
+chmod +x scripts/hooks/pre-commit
 
 echo "✅ Git hooks installed successfully!"
 echo "📝 Pre-commit hook will now check builds before each commit."
