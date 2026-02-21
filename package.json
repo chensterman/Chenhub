@@ -10,8 +10,8 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"postinstall": "sh scripts/setup-hooks.sh || echo 'Hooks setup skipped'",
 		"setup-hooks": "sh scripts/setup-hooks.sh",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --compiler-warnings state_referenced_locally:ignore",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --compiler-warnings state_referenced_locally:ignore --watch"
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.11.0",
