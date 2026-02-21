@@ -46,7 +46,6 @@ This project uses **Svelte 5 runes exclusively**. Do NOT use Svelte 4 syntax.
 - **Server-side**: `locals.supabase` (from `hooks.server.ts`)
 - **Client-side**: `data.supabase` (from layout data in `+layout.ts`)
 - **No ORM** — direct Supabase client calls (`.from()`, `.select()`, `.insert()`, `.rpc()`, etc.)
-- SQL migrations in `migrations/` — document run order in `README.md` when adding new ones
 - **Prefer Postgres functions** for bulk/batch operations instead of iterating client-side (e.g. `remove_tag_from_entries` deletes a tag from all entries in one call rather than looping in O(n)). Call via `.rpc()`
 - Tags are **case-insensitive** — use `.ilike()` when querying by name
 - `__all__` is a sentinel URL param value meaning "no tag filter"

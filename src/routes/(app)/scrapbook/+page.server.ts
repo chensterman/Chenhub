@@ -6,6 +6,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const { session } = await locals.safeGetSession();
 	const { page, limit, offset } = getPaginationParams(url, 20);
 
+	// Bucket list item filter — mutually exclusive with tag filter
+	const bucketListItemId = url.searchParams.get('bucket_list_item');
+
 	// Get user preference for default tag filter
 	const { data: preferences } = await locals.supabase
 		.from('user_preferences')
@@ -22,11 +25,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// Get filter parameters from URL
 	// If no 'tag' param in URL, use the user's default preference
 	// Special value '__all__' means user explicitly clicked "All tags" to override default
+	// Tag filter is ignored when filtering by bucket list item
 	const urlTagParam = url.searchParams.get('tag');
-	const tagFilter = urlTagParam === '__all__' 
-		? null 
-		: (urlTagParam ?? defaultTagFilter);
-	
+	const tagFilter = bucketListItemId
+		? null
+		: urlTagParam === '__all__'
+			? null
+			: (urlTagParam ?? defaultTagFilter);
+
 	const dateFrom = url.searchParams.get('dateFrom');
 	const dateTo = url.searchParams.get('dateTo');
 	const searchQuery = url.searchParams.get('q')?.trim() || null;
@@ -58,8 +64,43 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			)
 		`);
 
-	// Apply tag filter if present and not null (null means "All tags")
-	if (tagFilter !== null) {
+	// When filtering by bucket list item, restrict to linked entries via the join table
+	if (bucketListItemId) {
+		const { data: memoryLinks } = await locals.supabase
+			.from('bucket_list_memories')
+			.select('scrapbook_entry_id')
+			.eq('bucket_list_item_id', bucketListItemId);
+
+		const linkedIds = (memoryLinks ?? []).map((r: { scrapbook_entry_id: string }) => r.scrapbook_entry_id);
+
+		if (linkedIds.length === 0) {
+			// No linked entries — return empty result immediately
+			const [{ data: tags }, { data: profiles }, { data: bucketItem }] = await Promise.all([
+				locals.supabase.from('tags').select('name').order('name'),
+				locals.supabase.from('profiles').select('id, email'),
+				locals.supabase.from('bucket_list_items').select('title').eq('id', bucketListItemId).single(),
+			]);
+
+			const userNames: Record<string, string> = {};
+			for (const p of profiles ?? []) {
+				userNames[p.id] = p.email.split('@')[0];
+			}
+
+			return {
+				entries: [] as ScrapbookEntry[],
+				pagination: buildPaginationMeta(0, page, limit),
+				loadError: null,
+				tags: (tags?.map((t: { name: string }) => t.name) || []) as string[],
+				activeFilters: { tag: null, dateFrom, dateTo, q: searchQuery },
+				bucketListItem: bucketItem ? { id: bucketListItemId, title: bucketItem.title as string } : null,
+				userNames,
+			};
+		}
+
+		countQuery = countQuery.in('id', linkedIds);
+		dataQuery = dataQuery.in('id', linkedIds);
+	} else if (tagFilter !== null) {
+		// Apply tag filter if present and not null (null means "All tags")
 		countQuery = countQuery.contains('tags', [tagFilter]);
 		dataQuery = dataQuery.contains('tags', [tagFilter]);
 	}
@@ -90,6 +131,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			pagination: buildPaginationMeta(0, page, limit),
 			loadError: countError.message,
 			activeFilters: { tag: tagFilter, dateFrom, dateTo, q: searchQuery },
+			bucketListItem: null,
 		};
 	}
 
@@ -103,6 +145,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			entries: [] as ScrapbookEntry[],
 			pagination: buildPaginationMeta(count ?? 0, page, limit),
 			loadError: error.message,
+			bucketListItem: null,
 		};
 	}
 
@@ -121,15 +164,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		}),
 	}));
 
-	// Load all shared tags
-	const { data: tags } = await locals.supabase
-		.from('tags')
-		.select('name')
-		.order('name');
+	// Load all shared tags and profiles
+	const [{ data: tags }, { data: profiles }] = await Promise.all([
+		locals.supabase.from('tags').select('name').order('name'),
+		locals.supabase.from('profiles').select('id, email'),
+	]);
 
-	const { data: profiles } = await locals.supabase
-		.from('profiles')
-		.select('id, email');
+	// Optionally fetch the bucket list item title for the banner
+	let bucketItem: { title: string } | null = null;
+	if (bucketListItemId) {
+		const { data } = await locals.supabase
+			.from('bucket_list_items')
+			.select('title')
+			.eq('id', bucketListItemId)
+			.single();
+		bucketItem = data;
+	}
 
 	const userNames: Record<string, string> = {};
 	for (const p of profiles ?? []) {
@@ -140,13 +190,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		entries,
 		pagination: buildPaginationMeta(count ?? 0, page, limit),
 		loadError: null,
-		tags: (tags?.map((t) => t.name) || []) as string[],
+		tags: (tags?.map((t: { name: string }) => t.name) || []) as string[],
 		activeFilters: { 
 			tag: tagFilter as string | null, 
 			dateFrom: dateFrom as string | null, 
 			dateTo: dateTo as string | null,
 			q: searchQuery,
 		},
+		bucketListItem: bucketListItemId && bucketItem
+			? { id: bucketListItemId, title: bucketItem.title as string }
+			: null,
 		userNames,
 	};
 };
