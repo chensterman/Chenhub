@@ -4,7 +4,7 @@ ChenHub is a private shared app for two users with:
 
 - **Scrapbook**: create, filter, view, and delete polaroid memories with shared tags
 - **Letters**: create, edit, view, and delete shared letters
-- **Bucket List**: add, edit, filter, and delete shared bucket list ideas with an "I'm Feeling Lucky" random picker
+- **Bucket List**: add, edit, filter, and delete shared bucket list ideas with an "I'm Feeling Lucky" random picker; mark items as completed and link them to scrapbook memories
 - **Settings**: manage shared tags and set default scrapbook filter preferences
 
 Built with **SvelteKit 2 + Svelte 5**, **Tailwind CSS 4**, **Bits UI**, and **Supabase** (Auth + Postgres + Storage).
@@ -35,8 +35,11 @@ Built with **SvelteKit 2 + Svelte 5**, **Tailwind CSS 4**, **Bits UI**, and **Su
 - Add ideas with a title, description, and tags
 - Both users can edit any item; only the creator can delete it
 - Filter by tag (uses the same shared tags system as scrapbook)
-- "I'm Feeling Lucky" button picks a random item from the full list
+- "I'm Feeling Lucky" button picks a random incomplete item
 - Paginated card grid
+- Mark items as completed with an optional completion date
+- Toggle to show/hide completed items (hidden by default)
+- Completed items can be linked to scrapbook memories; "See memories →" navigates to the scrapbook filtered to those entries
 
 ### Shared Tags System
 - All tags are shared between users
@@ -78,7 +81,8 @@ This repo expects the following resources in Supabase:
    - `letters`
    - `scrapbook_entries`
    - `scrapbook_polaroids`
-   - `bucket_list_items` (see `migrations/create_bucket_list_table.sql`)
+   - `bucket_list_items`
+   - `bucket_list_memories` (link bucket list items with scrapbook memories)
    - `user_preferences` (for default tag filter settings)
    - `tags` (shared tags system)
 2. **Storage bucket**
