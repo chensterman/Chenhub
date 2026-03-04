@@ -80,8 +80,11 @@
 	let allEntries = $state<ScrapbookEntry[]>([]);
 	let linkedEntryIds = $state<Set<string>>(new Set());
 	let memoriesLoading = $state(false);
+	let memoriesSearchLoading = $state(false);
 	let memoriesSaving = $state(false);
 	let memoriesError = $state('');
+
+	const ENTRIES_LIMIT = 100;
 
 	const completeDateLabel = $derived(
 		completeDateValue
@@ -89,14 +92,39 @@
 			: 'Select date'
 	);
 
-	const filteredEntries = $derived(
-		memoriesSearch.trim()
-			? allEntries.filter((e) =>
-					(e.title ?? '').toLowerCase().includes(memoriesSearch.toLowerCase()) ||
-					(e.location ?? '').toLowerCase().includes(memoriesSearch.toLowerCase())
-			  )
-			: allEntries
-	);
+	// Search the DB when the query changes so entries beyond the initial load are findable
+	$effect(() => {
+		const q = memoriesSearch.trim();
+		const item = memoriesItem;
+		if (!memoriesOpen || !item) return;
+
+		let cancelled = false;
+		const timer = setTimeout(async () => {
+			if (cancelled) return;
+			memoriesSearchLoading = true;
+
+			let query = data.supabase
+				.from('scrapbook_entries')
+				.select('id, title, date, location, tags')
+				.order('date', { ascending: false })
+				.limit(ENTRIES_LIMIT);
+
+			if (q) {
+				query = query.or(`title.ilike.%${q}%,location.ilike.%${q}%`);
+			}
+
+			const { data: entries } = await query;
+			if (!cancelled) {
+				allEntries = (entries ?? []) as ScrapbookEntry[];
+				memoriesSearchLoading = false;
+			}
+		}, q ? 300 : 0);
+
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	});
 
 	function getCreatorLabel(createdBy: string) {
 		return data.userNames?.[createdBy] ?? 'someone';
@@ -346,18 +374,12 @@
 		memoriesLoading = true;
 		memoriesOpen = true;
 
-		const [{ data: entries }, { data: existingLinks }] = await Promise.all([
-			data.supabase
-				.from('scrapbook_entries')
-				.select('id, title, date, location, tags')
-				.order('date', { ascending: false }),
-			data.supabase
-				.from('bucket_list_memories')
-				.select('scrapbook_entry_id')
-				.eq('bucket_list_item_id', item.id),
-		]);
+		// Only fetch existing links here; the entries list is loaded by the $effect
+		const { data: existingLinks } = await data.supabase
+			.from('bucket_list_memories')
+			.select('scrapbook_entry_id')
+			.eq('bucket_list_item_id', item.id);
 
-		allEntries = (entries ?? []) as ScrapbookEntry[];
 		linkedEntryIds = new Set((existingLinks ?? []).map((r: any) => r.scrapbook_entry_id));
 		memoriesLoading = false;
 	}
@@ -917,12 +939,12 @@
 
 				<!-- Entry list -->
 				<div class="max-h-72 overflow-y-auto rounded-xl border border-border/60 bg-card">
-					{#if memoriesLoading}
+					{#if memoriesLoading || memoriesSearchLoading}
 						<p class="p-4 text-center text-sm text-muted-foreground">Loading memories...</p>
-					{:else if filteredEntries.length === 0}
+					{:else if allEntries.length === 0}
 						<p class="p-4 text-center text-sm text-muted-foreground">No memories found</p>
 					{:else}
-						{#each filteredEntries as entry}
+						{#each allEntries as entry}
 							<button
 								type="button"
 								class={`flex w-full items-start gap-3 border-b border-border/40 px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40 ${linkedEntryIds.has(entry.id) ? 'bg-green-50/60 dark:bg-green-950/30' : ''}`}
