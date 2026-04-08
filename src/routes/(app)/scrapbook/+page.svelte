@@ -153,12 +153,21 @@
 			: [...selectedNewTags, tag];
 	}
 
+	const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
 	async function onFileSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
 		
 		if (!file) {
 			selectedPolaroid = null;
+			return;
+		}
+
+		if (file.size > MAX_FILE_SIZE_BYTES) {
+			errorMessage = 'File is too large. Please choose an image under 50 MB.';
+			selectedPolaroid = null;
+			if (fileInputRef) fileInputRef.value = '';
 			return;
 		}
 
@@ -196,8 +205,21 @@
 				selectedPolaroid = convertedFile;
 			} catch (error) {
 				console.error('HEIC conversion error:', error);
-				errorMessage = 'Failed to convert HEIC image. Please try a different file.';
+				const errStr = typeof error === 'string' ? error : (error instanceof Error ? error.message : '');
+				if (errStr.startsWith('ERR_LIBHEIF')) {
+					// Most common on iPhone 15 Pro / iOS 18 — libheif inside heic2any doesn't support newer HEIC variants
+					errorMessage = 'This HEIC format isn\'t supported (common with iOS 18 photos). On your iPhone, share the photo as JPEG instead: tap Share → Options → Most Compatible.';
+				} else if (errStr.startsWith('ERR_DOM')) {
+					errorMessage = 'Could not read the file — it may be corrupted or still downloading. Try again or choose a different photo.';
+				} else if (errStr.startsWith('ERR_CANVAS')) {
+					errorMessage = 'Your browser couldn\'t process the image. Try a different browser, or share the photo as JPEG from your iPhone.';
+				} else if (errStr.includes('already browser readable')) {
+					errorMessage = 'This file doesn\'t need conversion. Try renaming it to .jpg and uploading again.';
+				} else {
+					errorMessage = 'Failed to convert HEIC image. Please try a different file.';
+				}
 				selectedPolaroid = null;
+				if (fileInputRef) fileInputRef.value = '';
 			} finally {
 				convertingImage = false;
 			}
