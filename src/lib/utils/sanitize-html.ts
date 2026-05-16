@@ -6,6 +6,11 @@
 
 const ALLOWED_TAGS = new Set(['b', 'i', 'u', 's', 'span', 'br', 'p']);
 
+/** contenteditable often emits <div>; normalize to <p> before sanitizing. */
+function normalizeLetterBlockTags(html: string): string {
+	return html.replace(/<div(\s[^>]*)?>/gi, '<p>').replace(/<\/div>/gi, '</p>');
+}
+
 /** Extract only "color: value" from a style string; drops everything else. */
 function sanitizeStyle(style: string): string {
 	const colorMatch = /color\s*:\s*([^;]+)/i.exec(style);
@@ -35,6 +40,7 @@ function parseOpeningTag(raw: string): { name: string; style?: string } | null {
 
 export function sanitizeLetterHtml(html: string): string {
 	if (typeof html !== 'string') return '';
+	html = normalizeLetterBlockTags(html);
 	let out = '';
 	let i = 0;
 	while (i < html.length) {
@@ -83,5 +89,5 @@ export function stripHtmlToText(html: string): string {
 
 /** True if content looks like HTML we should render with @html. */
 export function isLetterHtml(content: string): boolean {
-	return typeof content === 'string' && /<(?:\/?(?:b|i|u|s|span|br|p)(?:\s|>))/i.test(content);
+	return typeof content === 'string' && /<(?:\/?(?:b|i|u|s|span|br|p|div)(?:\s|>))/i.test(content);
 }

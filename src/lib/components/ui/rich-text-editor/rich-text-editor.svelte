@@ -23,6 +23,15 @@
 		}
 	});
 
+	function ensureParagraphSeparator() {
+		if (!editorEl) return;
+		try {
+			document.execCommand('defaultParagraphSeparator', false, 'p');
+		} catch {
+			// unsupported in some browsers
+		}
+	}
+
 	function syncValue() {
 		if (editorEl) value = editorEl.innerHTML;
 	}
@@ -176,6 +185,7 @@
 		contenteditable="true"
 		data-placeholder={placeholder}
 		class="min-h-[200px] resize-none px-3 py-2 text-base outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground focus-visible:ring-0"
+		onfocus={ensureParagraphSeparator}
 		oninput={syncValue}
 		onpaste={syncValue}
 		onkeydown={handleKeydown}
