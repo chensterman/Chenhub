@@ -232,3 +232,9 @@
 		{/if}
 	{/if}
 </div>
+
+<style>
+	:global(.letter-content p + p) {
+		margin-top: 1em;
+	}
+</style>
